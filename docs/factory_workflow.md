@@ -29,6 +29,7 @@ Prime directive: **contract-first, then fan out.**
 3. **The contract is sacred and centrally owned.** Only the supervisor edits `proto/`, `Cargo.lock`, `package.json`/`yarn.lock`, and other cross-cutting lockfiles.
 4. **Test-driven and self-verifying.** Tests are written/confirmed *before* implementation. A lane is not "done" until its tests are green (§7, §8).
 5. **Async supervision.** Workers run in the background and notify on completion; the supervisor stays unblocked.
+6. **Best model, always (quality-first).** Every subagent uses the model that produces the *best* result for its task — never the fastest or cheapest. Cost is explicitly not a constraint (see §4a).
 
 ---
 
@@ -71,6 +72,7 @@ Every dispatch is a job spec handed to a `best-of-n-runner` subagent (own branch
 Job:
   lane:        A (engine)
   branch:      lane/engine/points-at-stake-queue
+  model:       best-for-task, quality-first (e.g. Opus 4.8, 1M context, Max Mode) — §4a
   scope:       ONLY rslib/src/scheduler/queue/, rslib/src/storage/card/mod.rs
   contract:    proto frozen at commit <hash>
   tests-first: write/confirm the failing tests BEFORE implementation (§7)
@@ -83,6 +85,34 @@ Job:
 
 "Wholly separate parts" holds because scope is enforced by both directory ownership and physical
 worktree isolation.
+
+---
+
+## 4a. Model selection policy (quality-first, cost-blind)
+
+**Pick the model that produces the best result for the task — never the fastest or cheapest.**
+The human has explicitly stated cost is not a concern and is willing to spend any amount, so the
+factory optimizes purely for output quality and correctness.
+
+- **Default to the strongest available model** for real engineering work. If Opus 4.8 with 1M
+  context in Max Mode is genuinely the best for a lane, deploy it without hesitation. The same goes
+  for any future model that is strictly better.
+- **Match capability to task difficulty (upward only).** Harder/higher-stakes lanes — the Rust
+  engine (A), AI/eval (D), sync correctness (F), mobile FFI (E) — always get a top-tier reasoning
+  model with the largest useful context. Lower-stakes lanes (docs/proof polish) *may* use a smaller
+  model only if it demonstrably matches quality, but the tie-breaker is always quality, never price
+  or speed.
+- **Large context when it helps.** Use the biggest context window that improves grounding (e.g.
+  loading whole crates, the proto contract, and the test charter together). Do not truncate context
+  to save tokens.
+- **Max Mode / max reasoning on.** Prefer maximum reasoning effort for implementation, debugging,
+  and review subagents (Bugbot / security-review on risky lanes especially).
+- **No cost/speed downgrades.** Never swap to a weaker or faster model to reduce spend or latency.
+  Throughput comes from parallelism across lanes (§3) and async supervision — not from cheaper models.
+- **When unsure, go stronger.** If two models could work, choose the more capable one.
+
+This policy applies to every dispatched subagent (lane workers, fix-jobs, reviewers) and to the
+supervisor's own reasoning.
 
 ---
 
