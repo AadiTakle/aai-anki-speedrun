@@ -99,6 +99,21 @@ honesty bar.
 > (e.g. `cursor/…`). Preserve the `feat/<id>-<slug>` intent in the branch name and record the real
 > feature id/branch in the ledger.
 
+## Skills & rules
+
+Repeatable SOPs live as project rules in `.cursor/rules/*.mdc` (auto-attached by Cursor) and are
+indexed in `docs/skills.md`. Consult them when relevant:
+
+- `add-backend-rpc.mdc` — the exact recipe to add/change a backend RPC or proto message across
+  Rust↔Python↔TS (undo-safe, with regen + test steps). Use for any `SpeedrunService` work.
+- `factory-lane-worker.mdc` — the TDD loop, scope/isolation, strict test-integrity rule, and per-lane
+  gates, condensed for every implementer.
+- `proof-and-eval-tooling.mdc` — specs for the benchmark (7h), eval/calibration, leakage (7e), and
+  crash/offline (7g) tooling (deps land at the owning lane's FREEZE).
+
+For the **iOS lane on a Mac**, use the `xcode-project-setup` plugin skill (SPM/Xcode wiring; macOS +
+Swift only). See `docs/skills.md` for the plugin-skill index.
+
 ## Cursor Cloud specific instructions
 
 - **Run everything from `anki/`.** All build/run/test/lint commands live there and are driven by

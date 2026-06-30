@@ -1,0 +1,44 @@
+---
+description: Operating rules for a lane worker (or the supervisor) implementing a feature in this repo. Encodes the TDD loop, scope/isolation, the strict test-integrity rule, and per-lane gates. Use for any feature implementation work.
+alwaysApply: false
+---
+
+# Factory lane-worker discipline
+
+Authoritative sources: `docs/factory_workflow.md` (§4, §7, §8) and `docs/review_workflow.md`. This
+rule is the short, always-applicable summary.
+
+## TDD loop (red → green → refactor)
+1. **Tests first.** Write or confirm the slice's acceptance tests; they must **fail first for the
+   right reason** (proving they exercise the new behavior).
+2. **Implement to green** — minimum code to pass those tests plus the lane gate.
+3. **Refactor under green** only.
+4. **Return the full test output** (not a summary claim) so red→green is verifiable.
+
+## Scope & isolation
+- Work only inside your lane's seam (its directory set). Never touch another lane's files.
+- **Never edit `proto/`, `Cargo.lock`, `package.json`/`yarn.lock`, or generated code** — these are
+  supervisor-owned. Need a contract/dep change? File a request in your return message; do not make it
+  yourself.
+- One feature = one branch + one PR, built in an isolated worktree. Stacked on its parent feature's
+  branch when dependent (see `review_workflow.md` §4). Record it in `docs/feature_ledger.md`.
+
+## Test-integrity rule (STRICT — non-negotiable)
+- You may **NOT** edit, weaken, skip, `#[ignore]`, comment out, or delete a test to make it pass, and
+  you may **NOT** loosen an assertion. If your change breaks a test, assume **your code is wrong**.
+- A red test you cannot make green within scope is a **STOP-and-report** condition. File a
+  **test-integrity report** to the supervisor (test name/path, why it may be outdated vs the frozen
+  spec, proposed change, evidence the impl is otherwise correct) and **wait for approval**. Anything
+  touching scope/acceptance criteria escalates to the human.
+
+## Per-lane gate (must be green before `ready-for-review`)
+| Lane | Gate |
+|------|------|
+| A — Engine | `just test-rust` + `just check:clippy`; undo-safe / no-corruption asserts |
+| B — Desktop | `just test-py` (Python calling into Rust) |
+| C — Web UI | `vitest` + Playwright e2e |
+| D — AI/eval | held-out accuracy + leakage check pass a **pre-registered** cutoff |
+| E — Mobile | device/emulator build + a real review session |
+| Integration | `just check` green on trunk, then sync / benchmark / crash tests |
+
+Run from `anki/`. Final `just check` green before handing the feature to review.

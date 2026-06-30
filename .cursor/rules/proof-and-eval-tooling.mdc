@@ -1,0 +1,44 @@
+---
+description: How to build the proof/eval tooling for the graded challenges — the benchmark harness (7h), held-out eval + calibration (Fri/Sun), the leakage check (7e), and the crash/offline tests (7g). Use when working Lane D (AI/eval) or Lane G (proof).
+globs: ml/**,tools/bench/**,docs/**
+alwaysApply: false
+---
+
+# Proof & eval tooling
+
+These back the graded challenges in `docs/project_guidelines.md` §7/§10 and the rubric's honesty bar.
+**Do not install these dependencies until the owning lane starts** — dep additions (Cargo.lock, a new
+`ml/` Python env) are batched into that lane's FREEZE by the supervisor, to avoid front-loading unused
+tooling. This rule is the spec for each tool.
+
+## Benchmark harness — challenge 7h (Lane G)
+- Add the `criterion` dev-dependency and a **`just bench`** recipe that loads the shared **50,000-card**
+  deck and reports **p50, p95, and worst-case** for each action: button-press ack, next-card after
+  grade, dashboard first load, dashboard refresh, sync of a normal session. One hand-picked number
+  does **not** count (§10).
+- Pair with a **synthetic deck generator** (a script/fixture that builds the 50k-card deck) so the
+  benchmark and large-scale tests are reproducible.
+- Targets to check against: §10 (p95 button <50 ms, next-card <100 ms, dashboard load <1 s, refresh
+  <500 ms, sync <5 s).
+
+## Held-out eval + calibration — Friday/Sunday (Lane D)
+- A **`uv`-managed `ml/` environment** with `numpy`, `scipy`, `scikit-learn`, `matplotlib`.
+- **Memory calibration:** reliability (calibration) chart + **Brier score / log loss** on held-out
+  reviews (when it says 80%, recall ≈ 80%).
+- **Performance:** accuracy on held-out exam-style questions.
+- **Pre-register the cutoff** before looking at results; AI outputs must trace to a named source and
+  **beat a simple baseline** (keyword/vector search).
+
+## Leakage check — challenge 7e (Lane D)
+- A script that scans training data for any held-out test item or a near-duplicate, and reports clean.
+- Leaked test data **zeroes** that score (rubric §11) — this gate is mandatory before any eval number
+  is reported.
+
+## Crash / offline tests — challenge 7g (Lane G/F)
+- A script that **kills a review mid-session 20×** in a row and asserts **`pragma integrity_check ==
+  ok`** afterward (zero corrupted collections, both platforms).
+- An offline test: AI features turn off cleanly while both apps keep working and still give a score.
+
+## AI-off invariant
+Everything above must hold with **AI switched off** — the MVP and all core scores run without model
+calls (see PRD "Out of Scope for MVP").
