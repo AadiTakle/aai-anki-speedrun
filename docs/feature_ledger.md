@@ -31,11 +31,19 @@ A = Rust engine · B = Python/Qt desktop · C = Web UI (Svelte) · D = AI/eval �
 
 ## Active features
 
-_No features in progress yet. The first feature is added here when planning the Wednesday slice._
+Wednesday slice planned (see `docs/wednesday_plan.md`). Contract not yet FROZEN; branches/PRs created
+at FAN OUT. `test_charter` points to the relevant section of `docs/wednesday_plan.md` §5.
 
 | id | title | lane | branch | pr | depends_on | state | base_commit | test_charter | review_notes |
 |----|-------|------|--------|----|------------|-------|-------------|--------------|--------------|
-| –  | –     | –    | –      | –  | –          | –     | –           | –            | –            |
+| F1  | Topic taxonomy + card→topic crosswalk (config-backed) | A/B | `feat/F1-topic-crosswalk` | – | – | planned | – | `wednesday_plan.md` §5 (F1/F4) | – |
+| F4  | Per-topic memory mastery query | A | `feat/F4-mastery-query` | – | F1 | planned | – | `wednesday_plan.md` §5 (F4) | – |
+| F5  | Points-at-stake / topic-aware review queue (Rust change) | A | `feat/F5-points-at-stake-queue` | – | F1 | planned | – | `wednesday_plan.md` §5 (F5) | – |
+| F6  | Memory score with range + give-up rule | A/C | `feat/F6-memory-score` | – | F4 | planned | – | `wednesday_plan.md` §5 (F6) | – |
+| F10 | Exam-deck review loop (import + run) | B/G | `feat/F10-review-loop` | – | F5 | planned | – | `wednesday_plan.md` §1 | – |
+| F11 | Linux installer (clean-machine) | B/F | `feat/F11-linux-installer` | – | core-green | planned | – | `wednesday_plan.md` §5 (F11) | – |
+| F12 | Mobile: AnkiDroid fork builds + review session | E | `feat/F12-mobile-ankidroid` | – | contract | planned | – | `wednesday_plan.md` §5 (F12) | – |
+| F13 | Proof harness: recordings + `just bench` skeleton | G | `feat/F13-proof-harness` | – | all | planned | – | `wednesday_plan.md` §1 | – |
 
 ## Completed / approved features
 
