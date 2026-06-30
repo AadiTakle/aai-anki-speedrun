@@ -287,9 +287,52 @@ impl Collection {
 
         queues.gather_cards(self)?;
 
+        // Points-at-stake is a Rust post-sort of the gathered review cards by
+        // blueprint_weight(topic) * weakness(topic), descending. The SQL gather
+        // uses the Day order (see storage/card review_order_sql), then we
+        // reorder the gathered set here, where the collection/config store is
+        // available. Note: this reorders within the already-limit-capped gather
+        // window (documented in docs/wednesday_plan.md §8).
+        if queues.context.sort_options.review_order
+            == crate::deckconfig::ReviewCardOrder::PointsAtStake
+        {
+            self.sort_review_by_points_at_stake(&mut queues.review)?;
+        }
+
         let queues = queues.build(self.learn_ahead_secs() as i64);
 
         Ok(queues)
+    }
+
+    /// Stable-sort gathered review cards by points-at-stake
+    /// (`blueprint_weight * weakness`) descending. Cards with no topic mapping
+    /// (or whose topic lacks a weight/weakness) score 0.0 and sort last; equal
+    /// scores keep the gather-time order.
+    fn sort_review_by_points_at_stake(&self, review: &mut [DueCard]) -> Result<()> {
+        let topics = self.speedrun_topics()?;
+        let weakness = self.speedrun_topic_weakness()?;
+        let card_topics = self.speedrun_card_topics()?;
+
+        let points_at_stake = |card: &DueCard| -> f64 {
+            match card_topics.get(&card.id) {
+                Some(topic_id) => {
+                    let weight = topics
+                        .get(topic_id)
+                        .map(|t| t.blueprint_weight)
+                        .unwrap_or(0.0);
+                    let weak = weakness.get(topic_id).copied().unwrap_or(0.0);
+                    weight * weak
+                }
+                None => 0.0,
+            }
+        };
+
+        review.sort_by(|a, b| {
+            points_at_stake(b)
+                .partial_cmp(&points_at_stake(a))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(())
     }
 }
 
@@ -356,6 +399,179 @@ mod test {
                 })
                 .collect()
         }
+
+        fn queue_as_card_ids(&mut self, deck_id: DeckId) -> Vec<CardId> {
+            self.build_queues(deck_id)
+                .unwrap()
+                .iter()
+                .map(|entry| entry.card_id())
+                .collect()
+        }
+
+        /// Adds a note whose first card is turned into a due review card, and
+        /// returns that card's id.
+        fn add_due_review_card(&mut self, nt: &Notetype, deck: DeckId) -> CardId {
+            let mut note = nt.new_note();
+            note.set_field(0, "foo").unwrap();
+            note.id.0 = 0;
+            self.add_note(&mut note, deck).unwrap();
+            let mut card = self.storage.get_card_by_ordinal(note.id, 0).unwrap().unwrap();
+            // All test review cards share the same due/interval so the gather-time
+            // SQL ordering is a tie and the points-at-stake post-sort dominates.
+            card.interval = 10;
+            card.due = 0;
+            card.ctype = CardType::Review;
+            card.queue = CardQueue::Review;
+            let id = card.id;
+            self.update_cards_maybe_undoable(vec![card], false).unwrap();
+            id
+        }
+
+        fn seed_topic_weights(
+            &mut self,
+            topics: &[(&str, f64)],
+            weaknesses: &[(&str, f64)],
+            card_topics: &[(CardId, &str)],
+        ) {
+            use anki_proto::speedrun::CardTopic;
+            use anki_proto::speedrun::SetTopicWeightsRequest;
+            use anki_proto::speedrun::Topic;
+            use anki_proto::speedrun::TopicWeakness;
+
+            use crate::services::SpeedrunService;
+
+            let req = SetTopicWeightsRequest {
+                topics: topics
+                    .iter()
+                    .map(|(id, weight)| Topic {
+                        id: (*id).to_string(),
+                        name: (*id).to_string(),
+                        blueprint_weight: *weight,
+                    })
+                    .collect(),
+                card_topics: card_topics
+                    .iter()
+                    .map(|(card_id, topic_id)| CardTopic {
+                        card_id: card_id.0,
+                        topic_id: (*topic_id).to_string(),
+                    })
+                    .collect(),
+                weaknesses: weaknesses
+                    .iter()
+                    .map(|(topic_id, weakness)| TopicWeakness {
+                        topic_id: (*topic_id).to_string(),
+                        weakness: *weakness,
+                    })
+                    .collect(),
+            };
+            let _ = self.set_topic_weights(req).unwrap();
+        }
+    }
+
+    /// R1: with topics weighted and per-topic weakness seeded, and due review
+    /// cards mapped to topics, the points-at-stake order returns review cards
+    /// sorted by `blueprint_weight * weakness` descending.
+    #[test]
+    fn points_at_stake_orders_by_weight_times_weakness() -> Result<()> {
+        let mut col = Collection::new();
+        let mut deck = col.get_or_create_normal_deck("Default").unwrap();
+        let nt = col.get_notetype_by_name("Basic")?.unwrap();
+
+        // points-at-stake: cardio 0.5*0.9=0.45, renal 0.4*0.5=0.20, gi 0.2*0.3=0.06
+        let cardio = col.add_due_review_card(&nt, deck.id);
+        let renal = col.add_due_review_card(&nt, deck.id);
+        let gi = col.add_due_review_card(&nt, deck.id);
+
+        col.seed_topic_weights(
+            &[("cardio", 0.5), ("renal", 0.4), ("gi", 0.2)],
+            &[("cardio", 0.9), ("renal", 0.5), ("gi", 0.3)],
+            &[(cardio, "cardio"), (renal, "renal"), (gi, "gi")],
+        );
+
+        col.set_deck_review_order(&mut deck, ReviewCardOrder::PointsAtStake);
+        assert_eq!(col.queue_as_card_ids(deck.id), vec![cardio, renal, gi]);
+
+        Ok(())
+    }
+
+    /// R2: a due card whose topic has no weight/weakness (or no mapping at all)
+    /// scores 0.0 and sorts last; no panic, no skipped cards.
+    #[test]
+    fn points_at_stake_unmapped_card_sorts_last() -> Result<()> {
+        let mut col = Collection::new();
+        let mut deck = col.get_or_create_normal_deck("Default").unwrap();
+        let nt = col.get_notetype_by_name("Basic")?.unwrap();
+
+        let cardio = col.add_due_review_card(&nt, deck.id);
+        let renal = col.add_due_review_card(&nt, deck.id);
+        // No topic mapping for this card -> score 0.0 -> sorts last.
+        let orphan = col.add_due_review_card(&nt, deck.id);
+
+        col.seed_topic_weights(
+            &[("cardio", 0.5), ("renal", 0.4)],
+            &[("cardio", 0.9), ("renal", 0.5)],
+            &[(cardio, "cardio"), (renal, "renal")],
+        );
+
+        col.set_deck_review_order(&mut deck, ReviewCardOrder::PointsAtStake);
+        let queue = col.queue_as_card_ids(deck.id);
+        assert_eq!(queue.len(), 3, "no cards skipped");
+        assert_eq!(queue, vec![cardio, renal, orphan]);
+
+        Ok(())
+    }
+
+    /// R3: building + answering through the points-at-stake queue, then undoing,
+    /// restores prior state and leaves the database uncorrupted.
+    #[test]
+    fn points_at_stake_answer_then_undo_is_safe() -> Result<()> {
+        let mut col = Collection::new();
+        let mut deck = col.get_or_create_normal_deck("Default").unwrap();
+        let nt = col.get_notetype_by_name("Basic")?.unwrap();
+
+        let cardio = col.add_due_review_card(&nt, deck.id);
+        let renal = col.add_due_review_card(&nt, deck.id);
+
+        col.seed_topic_weights(
+            &[("cardio", 0.5), ("renal", 0.4)],
+            &[("cardio", 0.9), ("renal", 0.5)],
+            &[(cardio, "cardio"), (renal, "renal")],
+        );
+
+        col.set_deck_review_order(&mut deck, ReviewCardOrder::PointsAtStake);
+
+        // The highest points-at-stake card must come out first.
+        assert_eq!(col.queue_as_card_ids(deck.id)[0], cardio);
+
+        // Snapshot the top card before answering.
+        let before = col.storage.get_card(cardio)?.unwrap();
+
+        col.clear_study_queues();
+        let answered = col.answer_good();
+        assert_eq!(answered.card_id, cardio);
+
+        // Answering changed the card.
+        let after = col.storage.get_card(cardio)?.unwrap();
+        assert_ne!(after.reps, before.reps);
+
+        // Undo restores the previous state.
+        col.undo()?;
+        let restored = col.storage.get_card(cardio)?.unwrap();
+        assert_eq!(restored.reps, before.reps);
+        assert_eq!(restored.due, before.due);
+        assert_eq!(restored.interval, before.interval);
+        assert_eq!(restored.ctype, before.ctype);
+        assert_eq!(restored.queue, before.queue);
+
+        // No corruption introduced.
+        let integrity: String = col
+            .storage
+            .db
+            .pragma_query_value(None, "integrity_check", |row| row.get(0))
+            .unwrap();
+        assert_eq!(integrity, "ok");
+
+        Ok(())
     }
 
     #[test]

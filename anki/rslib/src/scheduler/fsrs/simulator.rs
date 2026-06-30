@@ -116,8 +116,9 @@ fn create_review_priority_fn(
             wrap!(move |_c, _w| rand::rng().random_range(0..deck_size) as i32)
         }
 
-        // Not implemented yet
-        Added | ReverseAdded | RelativeOverdueness => None,
+        // Not implemented yet. PointsAtStake is a queue-builder post-sort that
+        // depends on collection state, so it isn't modeled in the simulator.
+        Added | ReverseAdded | RelativeOverdueness | PointsAtStake => None,
     }
 }
 

@@ -893,6 +893,9 @@ fn review_order_sql(order: ReviewCardOrder, timing: SchedTimingToday, fsrs: bool
         ReviewCardOrder::Random => vec![],
         ReviewCardOrder::Added => vec![ReviewOrderSubclause::Added],
         ReviewCardOrder::ReverseAdded => vec![ReviewOrderSubclause::ReverseAdded],
+        // Points-at-stake gathers in the same order as Day; the real
+        // prioritization happens in the Rust post-sort in the queue builder.
+        ReviewCardOrder::PointsAtStake => vec![ReviewOrderSubclause::Day],
     };
     subclauses.push(ReviewOrderSubclause::Random);
 
