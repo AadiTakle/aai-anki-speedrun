@@ -48,9 +48,9 @@ impl crate::services::SpeedrunService for Collection {
 
     fn get_topic_mastery(
         &mut self,
-        _input: anki_proto::speedrun::GetTopicMasteryRequest,
+        input: anki_proto::speedrun::GetTopicMasteryRequest,
     ) -> error::Result<anki_proto::speedrun::TopicMasteryResponse> {
-        Ok(anki_proto::speedrun::TopicMasteryResponse::default())
+        self.topic_mastery(input.topic_ids)
     }
 
     fn get_memory_score(&mut self) -> error::Result<anki_proto::speedrun::MemoryScore> {

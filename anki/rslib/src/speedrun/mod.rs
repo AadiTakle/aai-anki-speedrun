@@ -8,5 +8,6 @@
 //! (`SpeedrunService`). This module currently provides compiling stubs that the
 //! Wednesday-slice features (F1, F4, F6) fill in. See docs/wednesday_plan.md.
 
+pub mod mastery;
 mod service;
 pub mod store;
