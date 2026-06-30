@@ -1,0 +1,88 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+
+package anki.speedrun;
+
+import "anki/generic.proto";
+import "anki/collection.proto";
+
+// Speedrun (USMLE Step 2 CK) additions. Kept in a dedicated service/file so the
+// upstream Anki protos stay untouched and future merges remain cheap.
+// See docs/PRD.md and docs/wednesday_plan.md.
+service SpeedrunService {
+  // Store the canonical topic taxonomy, blueprint weights, the card->topic
+  // crosswalk, and per-topic weakness. Persisted in col.conf. (PRD F1)
+  rpc SetTopicWeights(SetTopicWeightsRequest) returns (collection.OpChanges);
+  // Per-topic memory mastery: mastered count + average FSRS recall. (PRD F4)
+  rpc GetTopicMastery(GetTopicMasteryRequest) returns (TopicMasteryResponse);
+  // Memory score with a likely range + the give-up/abstain rule. (PRD F6)
+  rpc GetMemoryScore(generic.Empty) returns (MemoryScore);
+}
+
+// Implicitly includes any of the above methods not listed here (delegated to
+// the backend via with_col). Required: every FooService needs a
+// BackendFooService.
+service BackendSpeedrunService {}
+
+// A canonical exam topic with its blueprint weight.
+message Topic {
+  string id = 1;
+  string name = 2;
+  // Relative weight of this topic on the exam blueprint (>= 0).
+  double blueprint_weight = 3;
+}
+
+// Maps a card to a canonical topic id (the crosswalk).
+message CardTopic {
+  int64 card_id = 1;
+  string topic_id = 2;
+}
+
+// Per-topic weakness derived from performance data (0.0 = strong, 1.0 = weak).
+message TopicWeakness {
+  string topic_id = 1;
+  double weakness = 2;
+}
+
+message SetTopicWeightsRequest {
+  repeated Topic topics = 1;
+  repeated CardTopic card_topics = 2;
+  repeated TopicWeakness weaknesses = 3;
+}
+
+message GetTopicMasteryRequest {
+  // Optional filter; an empty list means "all topics".
+  repeated string topic_ids = 1;
+}
+
+message TopicMastery {
+  string topic_id = 1;
+  uint32 mastered = 2;
+  uint32 total = 3;
+  // Average FSRS retrievability across the topic's cards (0.0 .. 1.0).
+  double avg_recall = 4;
+}
+
+message TopicMasteryResponse {
+  repeated TopicMastery topics = 1;
+}
+
+// Memory score with its uncertainty range and the abstain rule.
+message MemoryScore {
+  // When true, the model abstains (insufficient data); point/low/high are
+  // unset.
+  bool abstained = 1;
+  double point = 2;
+  double low = 3;
+  double high = 4;
+  // Percent of the exam blueprint covered so far (0.0 .. 100.0).
+  double coverage_pct = 5;
+  // Human-readable reasons behind the number / abstention.
+  repeated string reasons = 6;
+  // Unix seconds when the score was last computed.
+  int64 updated_at = 7;
+}
