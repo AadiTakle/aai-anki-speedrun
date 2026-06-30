@@ -137,27 +137,154 @@ The app is opinionated about study order: it actively promotes the practice meth
 
 ## User Persona
 
-> Primary target persona, created from the brainlift's spiky insight that capable-but-high-stakes, time-pressured learners — especially IMGs, DOs, and students with learning differences — are the prime beneficiaries of a "speedrun" workflow (Insight 3; Category 6). Secondary users (US-MD and non-traditional students) run the same loop at lower score pressure.
+This product is built for a deliberately **narrow** audience: the **capable, high-stakes,
+time-compressed Step 2 CK examinee** whose bottleneck is **information organization, not knowledge**
+(the SPOV). They have already mastered the content through medical school and are highly effective
+learners; they are losing weeks to resource sprawl (~4.4 disconnected tools; Insight 5), manual
+error-tracking, and anxiety-driven over-study — not to missing facts.
 
-**Aisha Rahman — 27, International Medical Graduate (IMG)**
+**Who this is for (the target):**
 
-- **Context:** Already practiced as a junior doctor abroad; now preparing for Step 2 CK to match into a US residency. ~10 weeks out, studying ~8 hrs/day around visa and application logistics.
-- **Stakes:** Residency screening filters mean she must score **5–12 points higher** than US-MD peers for equal interest (§6.1 [25][26]); she targets 245+. U.S. systems-based practice and patient-safety content is newer to her (§6.1 [27]).
-- **Current toolset (the problem):** UWorld + AnKing Step 2 + OnlineMedEd + Divine Intervention + NBME forms. Five disconnected tools she stitches together by hand (the ~4.4-resource sprawl; Insight 5).
-- **Goals:** Cover the blueprint fast, convert recall into clinical reasoning, and *know* when she is actually ready without burning weeks on low-yield review.
+- **Primary — learners under disproportionate score/time pressure:** International Medical Graduates
+  (IMGs), DO students double-testing, and students with learning differences (ADHD/LD). They must
+  score higher than peers with less time (Insight 3; Category 6), so recovering wasted study time is
+  existential, not just convenient.
+- **Secondary — US-MD and non-traditional students** running the same loop at lower score pressure
+  (e.g. integrating prep into clinical rotations).
+
+**Who this is *not* for (out of audience):**
+
+- Early-stage learners still building baseline knowledge (they need content delivery — video
+  courses, lectures — which this product intentionally pushes *down/out*).
+- Anyone wanting more questions/content; the gold-standard QBanks already over-supply that. We
+  *orchestrate* existing resources, we don't replace them (Insight 1).
+- Non-Step-2 exams (out of scope per the brainlift).
+
+**Representative persona — Aisha Rahman, 27, International Medical Graduate (IMG):**
+
+- **Context:** Already practiced as a junior doctor abroad; now preparing for Step 2 CK to match into
+  a US residency. ~10 weeks out, studying ~8 hrs/day around visa and application logistics.
+- **Stakes:** Residency screening filters mean she must score **5–12 points higher** than US-MD peers
+  for equal interest (§6.1 [25][26]); she targets 245+. U.S. systems-based practice and patient-safety
+  content is newer to her (§6.1 [27]).
+- **Current toolset (the problem):** UWorld + AnKing Step 2 + OnlineMedEd + Divine Intervention +
+  NBME forms. Five disconnected tools she stitches together by hand (the ~4.4-resource sprawl;
+  Insight 5).
+- **Goals:** Cover the blueprint fast, convert recall into clinical reasoning, and *know* when she is
+  actually ready without burning weeks on low-yield review.
 - **Frustrations:**
-  - Spends evenings manually unsuspending AnKing cards and copying missed questions into a Google Doc error log she rarely revisits (§2.3 [16]).
+  - Spends evenings manually unsuspending AnKing cards and copying missed questions into a Google Doc
+    error log she rarely revisits (§2.3 [16]).
   - Can't tell whether her UWorld % means she's on track; UWSA overpredicts (§2.2).
   - Tempted to re-watch OnlineMedEd when anxious, even though it eats hours (§2.1; Insight 4).
   - Overwhelmed each morning by which of her five tools to open first (§5.1).
 
-### A Day in the Life: Aisha (dedicated period)
+## User Stories
 
-- **8:00** — Opens the app. *"Readiness 244 (239–250), low confidence - 61% coverage. Today: Renal + Cardiology are your highest-value gaps."*
-- **8:05** — Does a timed 40-question random block in UWorld.
-- **9:30** — The companion extension syncs her results: 12 misses → 31 AnKing cards auto-unsuspended, 12 error-log entries created with reframe prompts.
-- **9:35** — Anki session (~120 cards), front-loaded with the renal/cardio misses, interleaved across systems.
-- **10:15** — Dashboard updates: Renal performance 58% → 64%; a pacing flag appears on acid-base (*accurate but 95s/question*).
-- **10:20** — Guardrail: *"Endocrine is strong on memory and application — paused from today's queue."* She stops there instead of over-reviewing.
-- **1:00 (downtime)** — On her phone between errands, she clears 15 due reviews; they sync back to the desktop automatically.
-- **Sunday** — Takes NBME Form 14 and imports the score. The readiness range tightens and next week's focus shifts to her weakest high-yield sections.
+Each story is one **fake client** with a **unique, specific, start-to-finish workflow** through the
+MVP. Feature references map to the roadmap above (F1–F9). All stories are within MVP scope — **no AI**
+(no card generation, chatbot, or semantic search); every score runs with AI off.
+
+### US-1 — Aisha Rahman (IMG, dedicated period): "cover the blueprint and trust my readiness"
+
+*Goal:* study only high-value material and get an honest readiness range without manual bookkeeping.
+
+1. **Onboarding.** Imports her AnKing Step 2 deck. The app builds the canonical Step 2 taxonomy and
+   crosswalks her AnKing tags + UWorld subjects onto it; the coverage map reads **61%** (F1, F7).
+2. **8:00 — plan.** Dashboard shows three ranged scores; readiness is **low-confidence** ("244,
+   239–250, 61% coverage") and "Today's focus" surfaces her highest **points-at-stake** topics —
+   Renal, Cardiology (F5, F6, F7).
+3. **8:05 — retrieval.** Does a timed, randomized 40-question UWorld block.
+4. **9:30 — ingest + auto-link.** Pastes/imports the results; her 12 misses **auto-unsuspend** the 31
+   mapped AnKing cards and open 12 error-log entries with the reframe prompt (F2, F3).
+5. **9:35 — targeted review.** Anki session (~120 cards) **front-loaded by points-at-stake** and
+   seeded with today's misses, interleaved across systems (F5, F3).
+6. **10:15 — close the loop.** Per-topic memory↔performance updates (Renal 58%→64%); a pacing flag
+   appears on acid-base (*accurate but 95 s/question*) (F4, F8).
+7. **10:20 — stop.** A guardrail pauses Endocrine ("strong on memory *and* application") so she
+   doesn't over-review (F9).
+8. **1:00 — phone.** Between errands she clears 15 due reviews offline on her phone; they sync to the
+   desktop (mobile + sync).
+9. **Weekly.** Imports an NBME Form 14 score; the readiness range tightens and next week re-prioritizes
+   her weakest high-yield sections (F6 readiness, F7).
+
+*End state:* she touched only high-value material, never hand-managed unsuspension/error logs, and has
+a readiness range she can act on.
+
+### US-2 — Marcus Bell (DO, double-testing, on core rotations): "don't show me a score I haven't earned"
+
+*Goal:* make minimal rotation downtime count, and only trust readiness once it's backed by data.
+
+1. **Setup.** Sets exam = Step 2 CK; imports UWorld history + a partial AnKing subset. Coverage is
+   **38%** with ~120 graded reviews, so readiness **abstains**: *"No score yet — needs ≥50% coverage
+   and ≥200 graded reviews"* (F6 give-up rule, F7).
+2. **Micro-blocks.** During Internal Medicine downtime he does 15-question shelf-mode UWorld blocks
+   and imports each (F2).
+3. **Auto-link.** Misses auto-link to the mapped cards and build his error log; no manual tracking
+   (F3).
+4. **Focus.** The points-at-stake queue front-loads high-yield IM topics (55–65% of the exam) so his
+   scarce time hits the heaviest-weighted material first (F5).
+5. **Coverage nudge.** The coverage map flags an untouched high-weight section (Pediatrics) and keeps
+   readiness abstaining until he addresses it — a 10k-card deck that skips a section is not "ready"
+   (F7, challenge 7c).
+6. **Earned score.** After ~3 weeks, coverage crosses 50% and reviews exceed 200; readiness
+   **un-abstains** with a deliberately wide range and its reasons listed (F6).
+7. **Sync.** Reviews done on his phone during call shifts sync back to the desktop (mobile + sync).
+
+*End state:* effort routed to the heaviest gaps under severe time pressure; the score appears only
+once it is honestly supported.
+
+### US-3 — Priya Nair (US-MD with ADHD / learning difference): "tell me the one next thing, and stop me from spiraling"
+
+*Goal:* remove decision overhead and prevent anxiety-driven over-study.
+
+1. **Single next action.** Each morning the dashboard collapses choice paralysis to **one** "best next
+   action" plus the 3 highest points-at-stake topics — no five-app decision (F5, daily loop §1).
+2. **Short interleaved review.** She reviews short interleaved blocks seeded by recent misses, never a
+   blanket deck pass (F3, F5).
+3. **Pacing.** Pacing analytics flag accurate-but-slow topics (Biostatistics at 95 s/question) and
+   feed timing into readiness, so a topic counts as ready only when **fast *and* accurate** (F8).
+4. **Anti-over-study.** Guardrails pause topics already strong on both memory and performance and call
+   diminishing returns, countering the over-study failure mode (F9, Insight 4).
+5. **Mobile.** She does focused micro-sessions between classes offline; they sync when she's back
+   online (mobile + sync).
+
+*End state:* low cognitive overhead, no over-review spiral, pacing-aware readiness.
+
+### US-4 — Ben Carter (US-MD, secondary user, mid-clerkship): "turn rotations into continuous prep"
+
+*Goal:* integrate longitudinal prep into clinical rotations without manual cross-tool tracking.
+
+1. **Rotation-first.** He studies during clerkships, mostly on his phone during hospital downtime
+   (mobile).
+2. **Shelf-mode micro-blocks.** He runs shelf-mode QBank micro-blocks and imports them; misses
+   **selectively unsuspend only the mapped cards** — never the whole deck (F2, F3, §4.2 workflow).
+3. **Stay sharp on high-yield.** Points-at-stake keeps Internal Medicine high-yield fresh ahead of his
+   dedicated period (Medicine-last sequencing) (F5).
+4. **One source of truth.** Phone reviews sync to the desktop, where he checks the per-topic
+   memory↔performance gap weekly (F4, sync).
+
+*End state:* clerkships become continuous, organized prep; one connected workflow instead of 4–5
+disconnected tools.
+
+## Tech Stack
+
+Speedrun keeps Anki's layered architecture and adds a Rust `speedrun` engine module, a phone client on
+the **same** engine, and a Step 2 dashboard — all glued by the single protobuf contract. AI/eval is a
+deferred lane and the product runs fully with AI off.
+
+| Layer | Technology | Role |
+|-------|------------|------|
+| Desktop client | PyQt6 shell (`aqt`) hosting Svelte/TS web views via the `mediasrv` HTTP server | Main app shell + UI |
+| Web UI | Svelte + TypeScript (`ts/`): reviewer, editor, **Step 2 dashboard** (3 scores, coverage, pacing) | Rendered views + dashboards |
+| Mobile client | AnkiDroid fork (Kotlin/Java + JNI); iOS via C-FFI/UniFFI (option) | Phone companion on the shared engine |
+| Shared engine | Rust `rslib` (crate `anki`) incl. new **`speedrun`** module | Scheduler/FSRS, storage, sync, points-at-stake order, mastery + scores |
+| Contract seam | `proto/anki/*.proto` + new `speedrun.proto` (`SpeedrunService`) → prost / PyO3 / TS codegen | One protobuf API across all layers |
+| Bridges | PyO3 (`_rsbridge.so`, desktop), JNI (Android), C-FFI/UniFFI (iOS) | Native calls into Rust |
+| Data | `collection.anki2` (SQLite) + `col.conf` JSON | Cards/notes/revlog + taxonomy/crosswalk/weights/attempts |
+| Resource ingestion (F2) | CSV/JSON/paste importers (UWorld · AMBOSS · NBME/Free120) → `QuestionAttempt`/`PracticeTestResult` | Consolidate performance data (AI-free) |
+| Sync | `anki-sync-server` (Rust/Axum), hub-and-spoke over HTTP | Two-way device sync |
+| Build & tooling | `just` → n2/ninja → `runner`; Rust 1.92 (cargo), uv/Python, node/yarn, protoc; Briefcase installer | Build, dev, packaging |
+| AI / eval (deferred, post-MVP) | `ml/` pipeline: card-gen, held-out eval, baselines, leakage check (behind a flag; off by default) | Friday+ lane D |
+
+**Full architecture diagram (mermaid):** see [`docs/tech_stack.md`](./tech_stack.md).
