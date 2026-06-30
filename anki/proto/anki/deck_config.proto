@@ -108,6 +108,11 @@ message DeckConfig {
       REVIEW_CARD_ORDER_RANDOM = 8;
       REVIEW_CARD_ORDER_ADDED = 9;
       REVIEW_CARD_ORDER_REVERSE_ADDED = 10;
+      // Speedrun (USMLE Step 2 CK): order due review cards by points-at-stake =
+      // blueprint_weight(topic) * weakness(topic), highest first. The real
+      // prioritization is a Rust post-sort of the gathered review vec; the
+      // gather-time SQL falls back to the same clause as DAY. (PRD F5)
+      REVIEW_CARD_ORDER_POINTS_AT_STAKE = 13;
     }
     enum ReviewMix {
       REVIEW_MIX_MIX_WITH_REVIEWS = 0;
