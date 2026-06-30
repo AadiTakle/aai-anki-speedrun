@@ -138,7 +138,13 @@ Swift only). See `docs/skills.md` for the plugin-skill index.
   they are build dependencies, not source.
 - **The nested `anki/.git` is intentional** (created by the update script) and does not interfere
   with this repo: files under `anki/` that are already tracked by `/workspace`'s git remain tracked
-  normally. Run your git workflow (commits/PRs) from `/workspace`.
+  normally. Run your git workflow (commits/PRs) from `/workspace`. The update script also makes a
+  **baseline commit** in that nested scaffold so `just check`'s contributor lint (`check:minilints`,
+  which runs `git log` inside `anki/`) sees a non-empty author; without a commit it fails with an
+  empty "Author  NOT found in list". Do not push the nested repo — it's a local build artifact.
+- **Adding a brand-new `anki/proto/anki/*.proto` file needs a forced reconfigure** before building
+  (`rm anki/out/build.ninja`, then `just build`), because the Python/TS proto file lists are globbed
+  at configure time. See `.cursor/rules/add-backend-rpc.mdc`.
 - **Running the GUI in this headless VM.** An X server is available on `DISPLAY=:1`. Launch with:
   ```
   DISPLAY=:1 QT_QPA_PLATFORM=xcb \

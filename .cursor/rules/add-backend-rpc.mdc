@@ -21,11 +21,15 @@ upstream files, to keep the upstream merge cheap. The only acceptable upstream `
 **append** (e.g. a new enum variant) — never renumber or repurpose existing fields/enum values.
 
 ## Steps
-1. **Define** message(s) + `rpc` in the right service. Two services per domain:
+1. **Define** message(s) + `rpc` in the right service. **Every `FooService` MUST have a matching
+   `BackendFooService`** (it may be empty) — `get_services` asserts equal counts and panics
+   otherwise. Two services per domain:
    - `FooService` → implemented on **`Collection`** (needs an open DB).
    - `BackendFooService` → implemented on **`Backend`** (no collection). A method only in
      `FooService` auto-delegates via `Backend::method() → with_col(|col| ...)`.
-   - Register a brand-new service in the backend service index so codegen emits it.
+   - New services are auto-discovered from the descriptor pool (no manual index to maintain); just
+     add `protobuf!(<name>, "<name>");` in `rslib/proto/src/lib.rs` and `pub mod <name>;` in
+     `rslib/src/lib.rs`, then `impl crate::services::FooService for Collection`.
 2. **Regenerate bindings:** run `just check` (from `anki/`). Outputs:
    - Rust traits → `OUT_DIR/backend.rs`, included by `rslib/src/services.rs`.
    - Python → `out/pylib/anki/_backend_generated.py`.
@@ -47,6 +51,10 @@ upstream files, to keep the upstream merge cheap. The only acceptable upstream `
 
 ## Gotchas
 - After any `.proto` edit, a full `just check` is needed before dependent Rust/Py/TS will compile.
+- **Adding a brand-new `proto/anki/*.proto` file requires forcing a reconfigure** before building
+  (`rm anki/out/build.ninja` then `just build`). The Python/TS proto file lists are globbed at
+  *configure* time, so a new file won't be code-generated otherwise — and `backend.ts` will fail to
+  resolve its `./anki/<name>_pb` import. (Editing an existing `.proto` does not need this.)
 - Append-only proto changes; don't renumber.
 - Generated files under `out/` are never committed by workers — they're regenerated deterministically
   during the merge train.
