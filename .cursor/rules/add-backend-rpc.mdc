@@ -1,0 +1,53 @@
+---
+description: How to add or change a backend RPC / protobuf message across the Rust ↔ Python ↔ TS layers in the Anki engine. Use whenever a feature needs a new backend call, message, or service (e.g. SpeedrunService scores/queue/mastery).
+globs: anki/proto/**,anki/rslib/**,anki/pylib/**,anki/ts/**
+alwaysApply: false
+---
+
+# Add a backend RPC across Rust ↔ Python ↔ TS
+
+The whole codebase is glued by one contract: `anki/proto/anki/*.proto`. Every cross-layer call is
+`run_service_method(service, method, protobuf_bytes)`. Follow this recipe exactly; see
+`docs/codebase_notes.md` §3, `anki/docs/language_bridge.md`, and `anki/docs/protobuf.md` for depth.
+
+## Ownership (factory workflow §3)
+`proto/`, `Cargo.lock`, `package.json`/`yarn.lock`, and generated code are **supervisor-owned**. A
+lane worker that needs a contract change **files a contract/dep request in its return message** and
+does NOT edit proto or lockfiles itself. Workers never commit generated code.
+
+## Where our additions go
+Put Speedrun RPCs in a **new `anki/proto/anki/speedrun.proto` with a `SpeedrunService`**, not in
+upstream files, to keep the upstream merge cheap. The only acceptable upstream `.proto` edit is an
+**append** (e.g. a new enum variant) — never renumber or repurpose existing fields/enum values.
+
+## Steps
+1. **Define** message(s) + `rpc` in the right service. Two services per domain:
+   - `FooService` → implemented on **`Collection`** (needs an open DB).
+   - `BackendFooService` → implemented on **`Backend`** (no collection). A method only in
+     `FooService` auto-delegates via `Backend::method() → with_col(|col| ...)`.
+   - Register a brand-new service in the backend service index so codegen emits it.
+2. **Regenerate bindings:** run `just check` (from `anki/`). Outputs:
+   - Rust traits → `OUT_DIR/backend.rs`, included by `rslib/src/services.rs`.
+   - Python → `out/pylib/anki/_backend_generated.py`.
+   - TS → `out/ts/lib/generated/backend.ts`.
+3. **Implement** the trait method in `rslib/src/<domain>/service.rs` (scheduler lives in
+   `rslib/src/scheduler/service/mod.rs`).
+   - **Mutations must be undo-safe:** wrap in `col.transact(Op::..., |col| ...)` and return
+     `OpChanges` (see `rslib/src/ops.rs`, `collection/transact.rs`, `backend/ops.rs`). Add a new `Op`
+     variant if needed. Read-only RPCs return their response message directly (no `transact`).
+4. **Python wrapper** (if user-facing): add a method in `pylib/anki/<domain>.py` calling
+   `col._backend.<snake_case_method>(...)`.
+5. **TS consumer:** import the generated client from `ts/lib/generated/backend.ts`; calls go out as
+   HTTP POST protobuf.
+6. **Tests (required, tests-first):**
+   - ≥3 Rust `#[cfg(test)]` tests in the touched module; use `Collection::new()` / helpers in
+     `rslib/src/tests.rs`.
+   - ≥1 Python test in `pylib/tests/` that opens a collection and calls through `col` (pattern:
+     `pylib/tests/test_schedv3.py`).
+
+## Gotchas
+- After any `.proto` edit, a full `just check` is needed before dependent Rust/Py/TS will compile.
+- Append-only proto changes; don't renumber.
+- Generated files under `out/` are never committed by workers — they're regenerated deterministically
+  during the merge train.
+- For an undo-safe mutation, also confirm `pragma integrity_check == ok` in a test.
