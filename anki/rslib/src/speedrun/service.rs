@@ -1,8 +1,12 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+use std::collections::HashMap;
+
 use crate::collection::Collection;
 use crate::error;
+use crate::prelude::CardId;
+use crate::speedrun::store::TopicInfo;
 
 // Stub implementations frozen with the contract. The Wednesday-slice features
 // replace these with real logic + tests:
@@ -13,9 +17,33 @@ use crate::error;
 impl crate::services::SpeedrunService for Collection {
     fn set_topic_weights(
         &mut self,
-        _input: anki_proto::speedrun::SetTopicWeightsRequest,
+        input: anki_proto::speedrun::SetTopicWeightsRequest,
     ) -> error::Result<anki_proto::collection::OpChanges> {
-        Ok(anki_proto::collection::OpChanges::default())
+        let topics: HashMap<String, TopicInfo> = input
+            .topics
+            .into_iter()
+            .map(|t| {
+                (
+                    t.id,
+                    TopicInfo {
+                        name: t.name,
+                        blueprint_weight: t.blueprint_weight,
+                    },
+                )
+            })
+            .collect();
+        let card_topics: HashMap<CardId, String> = input
+            .card_topics
+            .into_iter()
+            .map(|ct| (CardId(ct.card_id), ct.topic_id))
+            .collect();
+        let weakness: HashMap<String, f64> = input
+            .weaknesses
+            .into_iter()
+            .map(|w| (w.topic_id, w.weakness))
+            .collect();
+        self.set_speedrun_topic_weights(topics, card_topics, weakness)
+            .map(Into::into)
     }
 
     fn get_topic_mastery(
