@@ -11,10 +11,12 @@ freshly-gathered queue.
 On a synthetic 9-card / 3-topic deck (all cards tied at gather time so the
 points-at-stake post-sort is what decides the order) it proves:
 
-* Ordering: with ``REVIEW_CARD_ORDER_POINTS_AT_STAKE`` selected the queue comes
-  out grouped by ``blueprint_weight(topic) * weakness(topic)`` descending. Cards
-  are inserted round-robin across topics, so the plain gather order (due, then a
-  hash tiebreak) is interleaved; only the F5 post-sort produces topic blocks.
+* Ordering: with ``REVIEW_CARD_ORDER_POINTS_AT_STAKE`` selected the queue is
+  recency-decay *interleaved* by ``blueprint_weight(topic) * weakness(topic)``
+  (the topic "base"): the highest-base topic leads and recurs early/often, yet
+  no topic is ever shown twice in a row. Cards are inserted round-robin across
+  topics, so the plain gather order does not by itself produce this order - only
+  the F5 engine reorder does.
 * Full loop: every due review card can be answered through the scheduler until
   none remain - the session completes, nothing is skipped or stuck.
 * No corruption: ``pragma integrity_check`` is ``ok`` afterwards.
@@ -105,7 +107,10 @@ def test_exam_deck_review_loop_points_at_stake():
 
     _select_review_order(col, POINTS_AT_STAKE)
 
-    # --- Ordering: the queue is grouped by weight*weakness descending. --------
+    # --- Ordering: recency-decayed weighted interleaving (the F5 change). -----
+    # Points-at-stake no longer blocks a whole topic back-to-back; it interleaves
+    # topics by base = blueprint_weight * weakness so the dominant topic leads and
+    # recurs early/often while no topic is ever shown twice in a row.
     col.sched.reset()
     queued = col.sched.get_queued_cards(fetch_limit=50)
     ordered = [qc.card.id for qc in queued.cards]
@@ -114,14 +119,34 @@ def test_exam_deck_review_loop_points_at_stake():
     assert len(ordered) == len(card_topic)
 
     ordered_topics = [card_topic[cid] for cid in ordered]
-    expected_topics = [
-        tid for tid, _n, _w, _wk in TOPICS for _ in range(CARDS_PER_TOPIC)
-    ]
-    assert ordered_topics == expected_topics
 
-    # equivalently, the points-at-stake values are non-increasing
-    ordered_points = [points[card_topic[cid]] for cid in ordered]
-    assert ordered_points == sorted(ordered_points, reverse=True)
+    # each topic appears exactly CARDS_PER_TOPIC times (nothing dropped/duplicated)
+    for tid, _n, _w, _wk in TOPICS:
+        assert ordered_topics.count(tid) == CARDS_PER_TOPIC
+
+    # the highest points-at-stake topic (cardio) leads
+    dominant = max(points, key=lambda tid: points[tid])
+    weakest = min(points, key=lambda tid: points[tid])
+    assert dominant == "cardio"
+    assert ordered_topics[0] == dominant
+
+    # interleaved: no topic appears in two consecutive positions => the longest
+    # consecutive run of any single topic is exactly 1 for this deck.
+    max_run = run = 1
+    for prev, cur in zip(ordered_topics, ordered_topics[1:]):
+        run = run + 1 if cur == prev else 1
+        max_run = max(max_run, run)
+    assert max_run == 1, f"a topic repeated back-to-back: {ordered_topics}"
+
+    # the dominant topic shows early/often: its mean queue position precedes the
+    # weakest topic's mean position.
+    positions = {
+        tid: [i for i, t in enumerate(ordered_topics) if t == tid]
+        for tid, _n, _w, _wk in TOPICS
+    }
+    mean_dominant = sum(positions[dominant]) / len(positions[dominant])
+    mean_weakest = sum(positions[weakest]) / len(positions[weakest])
+    assert mean_dominant < mean_weakest
 
     # --- Full loop: answer every due review card through the scheduler. -------
     col.sched.reset()

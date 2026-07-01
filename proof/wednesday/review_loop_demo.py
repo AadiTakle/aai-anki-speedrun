@@ -9,8 +9,10 @@ synthetic multi-topic Step 2 CK deck, then drives it through the *real* v3
 scheduler to show the mandatory Rust engine change (F5 points-at-stake review
 order) working end-to-end:
 
-  1. the same deck under the stock DAY order (interleaved) vs. the new
-     REVIEW_CARD_ORDER_POINTS_AT_STAKE order (grouped by points, descending);
+  1. the same deck under the stock DAY order vs. the new
+     REVIEW_CARD_ORDER_POINTS_AT_STAKE order (recency-decayed weighted
+     interleaving: the dominant topic leads and recurs early/often, yet no
+     topic is ever shown twice in a row);
   2. a full review session - every due card answered until none remain;
   3. no database corruption afterwards (pragma integrity_check);
   4. undo of the last answer restoring that card to the due queue.
@@ -149,11 +151,24 @@ def main() -> None:
         ordered = print_order(
             col, card_topic, "--- POINTS_AT_STAKE order (F5 engine change) ---"
         )
-        pts = [POINTS[card_topic[cid]] for cid in ordered]
+        # Verify the recency-decayed weighted interleaving: the dominant
+        # (highest points-at-stake) topic leads, and no topic is ever shown
+        # twice in a row (longest single-topic run == 1).
+        topics_seq = [card_topic[cid] for cid in ordered]
+        dominant = max(POINTS, key=lambda tid: POINTS[tid])
+        max_run = run = 1
+        for prev, cur in zip(topics_seq, topics_seq[1:]):
+            run = run + 1 if cur == prev else 1
+            max_run = max(max_run, run)
+        dominant_first = topics_seq[0] == dominant
+        print("\n    topic sequence: " + " -> ".join(NAMES[t] for t in topics_seq))
         print(
-            f"\n    -> grouped by points, descending: "
-            f"{'OK' if pts == sorted(pts, reverse=True) else 'FAIL'}"
+            f"    -> interleaved (dominant '{NAMES[dominant]}' first = "
+            f"{dominant_first}; longest single-topic run = {max_run}): "
+            f"{'OK' if dominant_first and max_run == 1 else 'FAIL'}"
         )
+        assert dominant_first, "dominant topic must lead the interleaved queue"
+        assert max_run == 1, f"no topic may repeat back-to-back: {topics_seq}"
 
         # Full review session through the real scheduler.
         print("\n--- Full review session (answer every due card 'Good') ---")
@@ -177,6 +192,8 @@ def main() -> None:
             f"\n    session complete: answered {answered}/{total}; "
             f"remaining queue counts (new, lrn, rev) = ({new_c}, {lrn_c}, {rev_c})"
         )
+        assert answered == total, "every due card should be answered exactly once"
+        assert (new_c, lrn_c, rev_c) == (0, 0, 0), "the queue should drain to empty"
 
         # Undo-safety (checked before the raw col.db query below, which clears
         # the backend undo queue).
@@ -191,16 +208,19 @@ def main() -> None:
             f"queue={'review' if restored.queue == QUEUE_TYPE_REV else restored.queue}, "
             f"due={restored.due}, back in due queue={back_in_queue}"
         )
+        assert back_in_queue, "undo should restore the last card to the due queue"
 
         # No corruption after the full answer + undo cycle.
         integrity = col.db.scalar("pragma integrity_check")
         print("\n--- Database integrity ---")
         print(f"    pragma integrity_check -> {integrity}")
+        assert integrity == "ok", "database must not be corrupted"
 
         print("\n" + "=" * 68)
         print(
-            "PASS: points-at-stake ordered the deck, the session drained fully, "
-            "the\nDB is intact, and the last answer was undoable."
+            "PASS: points-at-stake interleaved the deck (dominant topic first, no\n"
+            "topic twice in a row), the session drained fully, the DB is intact,\n"
+            "and the last answer was undoable."
         )
         print("=" * 68)
     finally:
