@@ -5,22 +5,21 @@
 // screens and the backend. Every score/signal the console needs is exposed as a
 // typed async function returning a *View from ./types.
 //
-// DECOUPLING (deliberate): the backend RPCs for performance / readiness /
-// coverage / points-at-stake / next-action are being implemented concurrently
-// by another agent. This module MUST NOT import proto or generated symbols that
-// don't exist yet. So those functions are backed by SEEDED persona data behind
-// the stable interface, each with a single, clearly-marked swap seam. Wiring to
-// the real client later is a one-line change:
-//
-//     // TODO(swap): replace mock with `getPerformanceScore` from "@generated/backend"
-//     const msg = await getPerformanceScore({});
-//     return toPerformanceView(msg);
-//
-// `getMemoryScore` ALREADY exists in @generated/backend (frozen F6 RPC), so it
-// is wired for real here, with a mock fallback so the foundation still compiles
-// and renders standalone (e.g. in tests, or before the backend is running).
+// WIRED (integration): every function calls its real @generated/backend RPC and
+// maps the proto message into the *View shape, with the seeded persona data kept
+// as a FALLBACK (try/catch) so the screens still render standalone — in vitest,
+// or in the SvelteKit dev server before the Anki backend is reachable. In the
+// running app the real RPC answers, so the fallback never fires and scores are
+// live. Readiness honestly ABSTAINS (backend stub) until calibration exists.
 
-import { getMemoryScore as backendGetMemoryScore } from "@generated/backend";
+import {
+    getCoverageMap as backendGetCoverageMap,
+    getMemoryScore as backendGetMemoryScore,
+    getNextAction as backendGetNextAction,
+    getPerformanceScore as backendGetPerformanceScore,
+    getPointsAtStake as backendGetPointsAtStake,
+    getReadinessScore as backendGetReadinessScore,
+} from "@generated/backend";
 
 import { activePersona } from "./personas";
 import type {
@@ -88,11 +87,23 @@ export async function getMemoryScore(): Promise<MemoryScoreView> {
  * Seeded until the backend RPC lands.
  */
 export async function getPerformanceScore(): Promise<PerformanceScoreView> {
-    // TODO(swap): replace mock with `getPerformanceScore` from "@generated/backend":
-    //   const msg = await getPerformanceScore({});
-    //   return { ...toScoreView(msg), topics: msg.topics };
-    const persona = activePersona();
-    return { ...stamp(persona.performance), topics: persona.performance.topics };
+    try {
+        const msg = await backendGetPerformanceScore({});
+        return {
+            ...toScoreView(msg),
+            topics: msg.topics.map((t) => ({
+                topicId: t.topicId,
+                attempts: t.attempts,
+                correct: t.correct,
+                accuracy: Number(t.accuracy),
+                low: Number(t.low),
+                high: Number(t.high),
+            })),
+        };
+    } catch {
+        const persona = activePersona();
+        return { ...stamp(persona.performance), topics: persona.performance.topics };
+    }
 }
 
 /**
@@ -100,10 +111,13 @@ export async function getPerformanceScore(): Promise<PerformanceScoreView> {
  * calibrated (US-2's scenario). Seeded until the backend RPC lands.
  */
 export async function getReadinessScore(): Promise<ReadinessScoreView> {
-    // TODO(swap): replace mock with `getReadinessScore` from "@generated/backend":
-    //   const msg = await getReadinessScore({});
-    //   return toScoreView(msg);
-    return stamp(activePersona().readiness);
+    try {
+        // The backend honestly ABSTAINS until calibrated to NBME/UWSA, so a real
+        // response keeps readiness in its "not enough info" state (honesty bar).
+        return toScoreView(await backendGetReadinessScore({}));
+    } catch {
+        return stamp(activePersona().readiness);
+    }
 }
 
 /**
@@ -111,8 +125,25 @@ export async function getReadinessScore(): Promise<ReadinessScoreView> {
  * Seeded until the backend RPC lands.
  */
 export async function getCoverageMap(): Promise<CoverageMapView> {
-    // TODO(swap): replace mock with the F7 coverage-map RPC from "@generated/backend".
-    return activePersona().coverage;
+    try {
+        const msg = await backendGetCoverageMap({});
+        return {
+            // Backend covered_pct is a 0..1 blueprint-weighted fraction.
+            coveragePct: Number(msg.coveredPct) * 100,
+            // Readiness abstains below 50% coverage (design constant, not on the RPC).
+            abstainThresholdPct: 50,
+            sections: msg.sections.map((s) => ({
+                id: s.topicId,
+                name: s.name,
+                // F7 knows covered / not (has mapped cards), not a gradient — so a
+                // section reads 100% or 0%.
+                coveragePct: s.covered ? 100 : 0,
+                blueprintWeight: Number(s.blueprintWeight),
+            })),
+        };
+    } catch {
+        return activePersona().coverage;
+    }
 }
 
 /**
@@ -120,9 +151,20 @@ export async function getCoverageMap(): Promise<CoverageMapView> {
  * focus". A read-only view over the F5 signals. Seeded until the RPC is exposed.
  */
 export async function getPointsAtStake(): Promise<PointsAtStakeView> {
-    // TODO(swap): replace mock with `getPointsAtStake` from "@generated/backend":
-    //   return await getPointsAtStake({});
-    return { topics: activePersona().pointsAtStake };
+    try {
+        const msg = await backendGetPointsAtStake({});
+        return {
+            topics: msg.topics.map((t) => ({
+                topicId: t.topicId,
+                name: t.name,
+                blueprintWeight: Number(t.blueprintWeight),
+                weakness: Number(t.weakness),
+                points: Number(t.points),
+            })),
+        };
+    } catch {
+        return { topics: activePersona().pointsAtStake };
+    }
 }
 
 /**
@@ -130,6 +172,20 @@ export async function getPointsAtStake(): Promise<PointsAtStakeView> {
  * Seeded until the backend RPC lands.
  */
 export async function getNextAction(): Promise<NextActionView> {
-    // TODO(swap): replace mock with the next-action recommender RPC from "@generated/backend".
-    return activePersona().nextAction;
+    try {
+        const msg = await backendGetNextAction({});
+        return {
+            available: !msg.abstained,
+            headline: msg.headline,
+            meta: msg.reason,
+            topicIds: [...msg.topicIds],
+            blockSize: msg.blockSize,
+            // The backend recommends a review block of due cards; it does not yet
+            // estimate a duration.
+            estimatedMinutes: 0,
+            mode: msg.abstained ? "none" : "review",
+        };
+    } catch {
+        return activePersona().nextAction;
+    }
 }

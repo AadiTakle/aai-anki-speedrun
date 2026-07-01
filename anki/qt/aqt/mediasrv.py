@@ -773,9 +773,17 @@ exposed_backend_list = [
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",
-    # SpeedrunService (read-only; needed by the memory-score page + dashboard)
+    # SpeedrunService (STAT console: scores, focus, coverage, error log + ingest)
     "get_memory_score",
     "get_topic_mastery",
+    "get_performance_score",
+    "get_readiness_score",
+    "get_points_at_stake",
+    "get_coverage_map",
+    "get_next_action",
+    "get_error_log",
+    "import_qbank_data",
+    "relink_misses",
 ]
 
 
