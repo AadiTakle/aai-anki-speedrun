@@ -97,11 +97,14 @@ impl crate::services::SpeedrunService for Collection {
     // with real logic + tests (F3 relink misses + error log; next-action; the
     // coverage map). Defaults are the honest no-op / abstain.
     fn relink_misses(&mut self) -> error::Result<anki_proto::collection::OpChanges> {
-        Ok(anki_proto::collection::OpChanges::default())
+        // The inherent Collection::relink_misses is selected over this trait
+        // method; it recomputes weakness, unsuspends missed topics' cards, and
+        // appends the error log undo-safely (F3, see speedrun::relink).
+        Collection::relink_misses(self).map(Into::into)
     }
 
     fn get_error_log(&mut self) -> error::Result<anki_proto::speedrun::ErrorLogResponse> {
-        Ok(anki_proto::speedrun::ErrorLogResponse::default())
+        Collection::get_error_log(self)
     }
 
     fn get_next_action(&mut self) -> error::Result<anki_proto::speedrun::NextAction> {
