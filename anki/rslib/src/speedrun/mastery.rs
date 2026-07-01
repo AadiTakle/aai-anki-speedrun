@@ -127,6 +127,9 @@ impl Collection {
                 mastered,
                 total,
                 avg_recall,
+                // How many Review-state cards actually backed avg_recall, so
+                // consumers (F6) can tell "no data" from a real 0% recall.
+                recall_card_count: recall_count,
             });
         }
 
@@ -392,9 +395,21 @@ mod test {
             cardio.avg_recall > 0.0,
             "memory-backed recall should be > 0"
         );
+        // Two of cardio's three review cards carry a memory state, so exactly
+        // two backed avg_recall.
+        assert_eq!(
+            cardio.recall_card_count, 2,
+            "two cardio cards backed recall"
+        );
 
         let renal = find(&resp, "renal");
         assert_eq!(renal.avg_recall, 0.0, "no memory state -> 0.0");
+        // renal's recall is unbacked (0 contributing cards), so its avg_recall
+        // 0.0 must NOT be read as a real 0% recall.
+        assert_eq!(
+            renal.recall_card_count, 0,
+            "no memory state -> recall unbacked"
+        );
 
         Ok(())
     }

@@ -65,6 +65,10 @@ message TopicMastery {
   uint32 total = 3;
   // Average FSRS retrievability across the topic's cards (0.0 .. 1.0).
   double avg_recall = 4;
+  // How many of the topic's cards actually backed avg_recall (Review-state
+  // cards with an FSRS memory state). 0 means avg_recall is NOT backed by data
+  // and must not be read as a real 0% recall (honesty bar). (PRD F4)
+  uint32 recall_card_count = 5;
 }
 
 message TopicMasteryResponse {

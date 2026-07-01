@@ -15,15 +15,19 @@
 //! - **coverage_pct**: `100 * (Σ blueprint_weight over covered topics) / (Σ
 //!   blueprint_weight over ALL taxonomy topics)`; `0.0` when the total taxonomy
 //!   weight is `0`.
-//! - **point**: `100 * (Σ blueprint_weight*avg_recall over covered topics) / (Σ
-//!   blueprint_weight over covered topics)`, clamped to `[0, 100]`; when the
-//!   covered-weight sum is `0` the model abstains.
-//! - **ABSTAIN RULE (frozen):** `abstained = (n < 200) || (coverage_pct < 50)`.
-//!   A covered-weight sum of `0` implies `coverage_pct == 0 < 50`, so it is
-//!   already caught by this rule. When abstained, `point/low/high` are all
-//!   `0.0` (the real `coverage_pct` is still reported) and `reasons` names,
-//!   with numbers, which condition failed. Otherwise a non-degenerate band with
-//!   `0 <= low <= point <= high <= 100` and `high > low` is produced.
+//! - **point**: the blueprint-weighted mean recall over recall-backed covered
+//!   topics — `100 * (Σ weight*avg_recall) / (Σ weight)` — clamped to `[0,
+//!   100]`. A recall-backed topic is a covered topic whose `recall_card_count`
+//!   is at least one; covered topics with no FSRS recall data are excluded so
+//!   their sentinel `avg_recall` of `0.0` cannot depress the score with an
+//!   unbacked number (honesty bar).
+//! - **ABSTAIN RULE:** `abstained = (n < 200) || (coverage_pct < 50)` (frozen),
+//!   plus an honesty guard: even past those thresholds, if no covered topic is
+//!   recall-backed we abstain rather than emit an unbacked zero. When
+//!   abstained, `point/low/high` are all `0.0` (the real `coverage_pct` is
+//!   still reported) and `reasons` names why. Otherwise a non-degenerate band
+//!   bounded by `0 <= low <= point <= high <= 100`, with `high` above `low`, is
+//!   produced.
 //! - **band**: the uncertainty half-width shrinks with `sqrt(n)` and with
 //!   higher coverage, so it is monotonically non-increasing in `n` (more graded
 //!   reviews, with coverage & recall fixed, never widens the band) and strictly
@@ -57,6 +61,7 @@ impl Collection {
         let mastery = self.topic_mastery(vec![])?;
 
         let mut covered_weight = 0.0f64;
+        let mut scored_weight = 0.0f64;
         let mut weighted_recall_sum = 0.0f64;
         let mut covered_topics = 0u32;
         for tm in &mastery.topics {
@@ -66,8 +71,16 @@ impl Collection {
                     .map(|t| t.blueprint_weight)
                     .unwrap_or(0.0);
                 covered_weight += weight;
-                weighted_recall_sum += weight * tm.avg_recall;
                 covered_topics += 1;
+                // Only topics whose recall is actually backed by data contribute
+                // to the recall average. A topic with cards but no FSRS memory
+                // state reports avg_recall == 0.0 as a *sentinel*, not a real 0%
+                // recall (see F4 `recall_card_count`); counting it would depress
+                // the score with an unbacked number, violating the honesty bar.
+                if tm.recall_card_count > 0 {
+                    scored_weight += weight;
+                    weighted_recall_sum += weight * tm.avg_recall;
+                }
             }
         }
 
@@ -106,9 +119,29 @@ impl Collection {
             });
         }
 
-        // Not abstained => coverage_pct >= 50 with total_weight > 0, so
-        // covered_weight > 0 and this division is safe.
-        let weighted_recall = weighted_recall_sum / covered_weight; // 0..1
+        // Even with enough reviews and coverage, if none of the covered topics
+        // have FSRS recall data there is no honest basis for a number, so we
+        // abstain rather than emit an unbacked 0 (honesty bar).
+        if scored_weight <= 0.0 {
+            return Ok(MemoryScore {
+                abstained: true,
+                point: 0.0,
+                low: 0.0,
+                high: 0.0,
+                coverage_pct,
+                reasons: vec![
+                    "covered topics have no FSRS recall data yet (need reviewed cards \
+                     with a memory state)"
+                        .to_string(),
+                ],
+                updated_at,
+            });
+        }
+
+        // Recall is averaged only over topics whose recall is backed by data
+        // (scored_weight), never the full covered weight, so unbacked topics
+        // don't drag the estimate down.
+        let weighted_recall = weighted_recall_sum / scored_weight; // 0..1
         let point = (100.0 * weighted_recall).clamp(0.0, 100.0);
 
         // Uncertainty half-width (in score points). It shrinks with sqrt(n) so
@@ -416,6 +449,38 @@ mod test {
             .pragma_query_value(None, "integrity_check", |row| row.get(0))
             .unwrap();
         assert_eq!(integrity, "ok");
+        Ok(())
+    }
+
+    /// Honesty guard: even with enough reviews AND full coverage, a covered
+    /// topic whose cards carry no FSRS memory state has no recall data, so the
+    /// score abstains rather than emit an unbacked `0` — and says why.
+    #[test]
+    fn abstains_when_covered_but_no_recall_data() -> Result<()> {
+        let mut col = Collection::new();
+        // A due review card with NO memory state -> recall is unbacked.
+        let a = add_review_card(&mut col, 30, None, None);
+        seed_topics(&mut col, &[("cardio", 1.0)], &[(a.0, "cardio")]);
+        seed_revlog(&mut col, 250);
+
+        let score = col.memory_score()?;
+        assert!(
+            score.abstained,
+            "covered but no recall data must abstain, not emit an unbacked 0"
+        );
+        assert_eq!(score.point, 0.0);
+        assert_eq!(score.low, 0.0);
+        assert_eq!(score.high, 0.0);
+        assert!(
+            score.coverage_pct >= 50.0,
+            "coverage {} is still reported",
+            score.coverage_pct
+        );
+        assert!(
+            score.reasons.iter().any(|r| r.contains("recall data")),
+            "a reason must explain the missing recall data: {:?}",
+            score.reasons
+        );
         Ok(())
     }
 }
