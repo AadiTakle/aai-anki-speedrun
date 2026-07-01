@@ -93,9 +93,10 @@ impl crate::services::SpeedrunService for Collection {
         self.points_at_stake()
     }
 
-    // --- Wave 2 (build-readiness plan): frozen stubs. Lane workers replace each
-    // with real logic + tests (F3 relink misses + error log; next-action; the
-    // coverage map). Defaults are the honest no-op / abstain.
+    // --- Wave 2 (build-readiness plan): implemented. Each trait method delegates
+    // to its inherent Collection method: F3 relink misses + error log
+    // (speedrun::relink), next-action (speedrun::next_action), coverage map
+    // (speedrun::coverage).
     fn relink_misses(&mut self) -> error::Result<anki_proto::collection::OpChanges> {
         // The inherent Collection::relink_misses is selected over this trait
         // method; it recomputes weakness, unsuspends missed topics' cards, and
