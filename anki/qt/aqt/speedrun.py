@@ -38,28 +38,37 @@ _MEMORY_SCORE_GEOM_KEY = "speedrunMemoryScore"
 _open_dialogs: list[QDialog] = []
 
 
-# Memory Score dialog
+# SvelteKit page dialogs (API-enabled webviews)
 ##########################################################################
 
 
-def show_memory_score(mw: AnkiQt) -> QDialog:
-    """Open the memory-score page in an API-enabled webview dialog."""
+def _open_page_dialog(
+    mw: AnkiQt,
+    *,
+    page: str,
+    title: str,
+    kind: AnkiWebViewKind,
+    geom_key: str,
+    default_size: tuple[int, int],
+) -> QDialog:
+    """Open a SvelteKit page in a dialog whose webview is API-enabled, so its
+    backend RPC calls are authorized (the AuthInterceptor injects the key)."""
     dialog = QDialog(mw, Qt.WindowType.Window)
-    dialog.setWindowTitle("Memory Score")
+    dialog.setWindowTitle(title)
     disable_help_button(dialog)
     mw.garbage_collect_on_dialog_finish(dialog)
-    restoreGeom(dialog, _MEMORY_SCORE_GEOM_KEY, default_size=(520, 720))
+    restoreGeom(dialog, geom_key, default_size=default_size)
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(0, 0, 0, 0)
-    web = AnkiWebView(kind=AnkiWebViewKind.MEMORY_SCORE)
+    web = AnkiWebView(kind=kind)
     layout.addWidget(web)
-    web.load_sveltekit_page("memory-score")
+    web.load_sveltekit_page(page)
 
     _open_dialogs.append(dialog)
 
     def on_finished(_result: int) -> None:
-        saveGeom(dialog, _MEMORY_SCORE_GEOM_KEY)
+        saveGeom(dialog, geom_key)
         web.cleanup()
         if dialog in _open_dialogs:
             _open_dialogs.remove(dialog)
@@ -67,6 +76,41 @@ def show_memory_score(mw: AnkiQt) -> QDialog:
     qconnect(dialog.finished, on_finished)
     dialog.show()
     return dialog
+
+
+def show_memory_score(mw: AnkiQt) -> QDialog:
+    """Open the memory-score page in an API-enabled webview dialog."""
+    return _open_page_dialog(
+        mw,
+        page="memory-score",
+        title="Memory Score",
+        kind=AnkiWebViewKind.MEMORY_SCORE,
+        geom_key=_MEMORY_SCORE_GEOM_KEY,
+        default_size=(520, 720),
+    )
+
+
+# The five STAT console destinations (menu label, sveltekit page/route).
+_STAT_PAGES: list[tuple[str, str]] = [
+    ("Today", "today"),
+    ("Reviewer", "reviewer"),
+    ("Import \u2192 Auto-link", "import"),
+    ("Error log", "errors"),
+    ("Exam trajectory", "trajectory"),
+]
+
+
+def show_stat_page(mw: AnkiQt, page: str, title: str) -> QDialog:
+    """Open one STAT console page in an API-enabled dialog. In-app nav then moves
+    between the five destinations within the same webview."""
+    return _open_page_dialog(
+        mw,
+        page=page,
+        title=f"STAT \u00b7 {title}",
+        kind=AnkiWebViewKind.SPEEDRUN,
+        geom_key=f"speedrun_{page}",
+        default_size=(1180, 820),
+    )
 
 
 # Sample-data seeding (demo)
@@ -215,11 +259,24 @@ def seed_sample_data(mw: AnkiQt) -> None:
 
 
 def setup_speedrun_menu(mw: AnkiQt) -> None:
-    """Add a ``Speedrun`` submenu to Tools with the demo actions."""
+    """Add a ``Speedrun`` submenu to Tools with the STAT console + demo actions."""
     tools_menu = mw.form.menuTools
     menu = QMenu("Speedrun", tools_menu)
     tools_menu.addSeparator()
     tools_menu.addMenu(menu)
+
+    # The five STAT console destinations (the daily loop).
+    for label, page in _STAT_PAGES:
+        action = menu.addAction(label)
+        assert action is not None
+        # Default args bind the loop variables per iteration; the leading
+        # parameter absorbs QAction.triggered's `checked` bool.
+        qconnect(
+            action.triggered,
+            lambda _checked=False, p=page, t=label: show_stat_page(mw, p, t),
+        )
+
+    menu.addSeparator()
 
     score_action = menu.addAction("Memory Score")
     assert score_action is not None
