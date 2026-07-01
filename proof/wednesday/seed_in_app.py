@@ -14,7 +14,8 @@
 #        exec(open("/Users/atakle/aai-anki-speedrun/proof/wednesday/seed_in_app.py").read())
 #   4. Study the current deck  ->  cards come out topic-INTERLEAVED, highest
 #      points-at-stake (blueprint_weight x weakness) leading and recurring.
-#   5. Memory score page:  http://localhost:40000/_anki/pages/memory-score
+#   5. Memory score page (SvelteKit route at the server root, dev port 40000):
+#        http://localhost:40000/memory-score
 #
 # The Debug Console injects `mw`. Re-runnable (fully replaces prior seed data).
 
@@ -82,5 +83,5 @@ else:
         f"Seeded {len(crosswalk)} cards across {len(topics)} topics + 260 reviews; "
         "points-at-stake enabled on the current deck.\n"
         "-> Study the deck to see interleaving; open "
-        "http://localhost:40000/_anki/pages/memory-score for the score."
+        "http://localhost:40000/memory-score for the score."
     )
