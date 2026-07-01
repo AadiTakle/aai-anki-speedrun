@@ -1,0 +1,4 @@
+module SpeedrunFFI {
+    header "speedrun_ffi.h"
+    export *
+}

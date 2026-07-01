@@ -1,0 +1,6 @@
+# Pin the same toolchain the vendored Anki engine uses
+# (see ../../anki/rust-toolchain.toml). rustup has no global default in this
+# environment, and `anki/rust-toolchain.toml` is a sibling (not an ancestor)
+# of this crate, so it would not be discovered otherwise.
+[toolchain]
+channel = "1.92.0"

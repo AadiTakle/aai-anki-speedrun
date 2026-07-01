@@ -1,0 +1,35 @@
+[package]
+name = "speedrun-ffi"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Minimal C ABI over Anki's shared Rust engine (rslib) for mobile clients (Speedrun F12)."
+publish = false
+
+# IMPORTANT: this crate is intentionally its OWN workspace root (empty
+# `[workspace]` table below) so it does NOT join the vendored Anki cargo
+# workspace under `anki/`. That keeps `anki/Cargo.toml` / `anki/Cargo.lock`
+# (supervisor-owned) untouched: building here only writes a *separate*
+# `mobile/speedrun-ffi/Cargo.lock` and `mobile/speedrun-ffi/target/`.
+[workspace]
+
+[lib]
+name = "speedrun_ffi"
+# staticlib -> iOS (link into the app / an .xcframework)
+# cdylib    -> Android (.so) / dynamic linking / host smoke tests
+# rlib      -> so our own Rust integration test can call the C ABI directly
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+# Path dependency on the SHARED engine. We do NOT reimplement the scheduler:
+# every review action below is executed by rslib's real FSRS/queue code.
+anki = { path = "../../anki/rslib" }
+
+# rslib uses tokio's io-util methods (read_to_end/write_all/take/flush) but,
+# inside the Anki workspace, relies on Cargo feature unification from sibling
+# crates to turn those features on. Building rslib standalone loses that
+# unification, so we re-enable the full tokio feature set here (this crate and
+# rslib resolve to the same tokio, so the features unify back up to rslib).
+# We do not call tokio directly; this dependency exists purely for parity with
+# Anki's in-workspace feature set.
+tokio = { version = "1.45", features = ["full"] }

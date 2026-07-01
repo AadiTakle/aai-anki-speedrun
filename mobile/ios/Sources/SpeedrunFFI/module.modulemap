@@ -1,0 +1,7 @@
+// Re-uses the single-source-of-truth C header from the Rust crate so the Swift
+// binding and the Rust ABI can never drift. (Path is relative to this file:
+//   mobile/ios/Sources/SpeedrunFFI/ -> mobile/speedrun-ffi/include/)
+module SpeedrunFFI {
+    header "../../../speedrun-ffi/include/speedrun_ffi.h"
+    export *
+}

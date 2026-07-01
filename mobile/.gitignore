@@ -1,0 +1,9 @@
+# Rust build artifacts
+speedrun-ffi/target/
+
+# SwiftPM / Xcode build artifacts (incl. the generated xcframework binary)
+ios/.build/
+ios/build/
+ios/.swiftpm/
+*.xcframework
+DerivedData/

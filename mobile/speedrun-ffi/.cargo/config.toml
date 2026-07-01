@@ -1,0 +1,12 @@
+# Env needed to build the `anki` engine crate standalone (as a path dep).
+#
+# The Anki build normally injects these via `anki/.cargo/config.toml`, but that
+# config is NOT an ancestor of this crate, so Cargo does not load it here. We
+# only need PROTOC: the `anki_proto` build script runs protoc over
+# `anki/proto/anki/*.proto`, and protoc is not on PATH in this environment
+# (it lives in the bundled build toolchain under `anki/out/`).
+#
+# `relative = true` resolves the value against the directory that contains this
+# `.cargo` folder (i.e. `mobile/speedrun-ffi/`), matching Anki's own convention.
+[env]
+PROTOC = { value = "../../anki/out/extracted/protoc/bin/protoc", relative = true }
