@@ -35,6 +35,20 @@ service SpeedrunService {
   // Ranked points-at-stake topics (blueprint_weight * weakness) for the
   // "Today's focus" list. Read-only view over the F5 signals.
   rpc GetPointsAtStake(generic.Empty) returns (PointsAtStakeResponse);
+  // --- Wave 2 (build-readiness plan): the miss->focus loop + console views ---
+  // F3: turn imported misses into action. Recomputes per-topic weakness from
+  // QBank accuracy (replacing any seeded weakness), auto-unsuspends the cards
+  // mapped behind missed questions, and appends an error-log entry per miss.
+  // Undo-safe.
+  rpc RelinkMisses(generic.Empty) returns (collection.OpChanges);
+  // F3: the error log (misses) with a clinical-reasoning reframe prompt, for
+  // the console's "errors" review page.
+  rpc GetErrorLog(generic.Empty) returns (ErrorLogResponse);
+  // The single recommended next block for the "Today" console hero (size +
+  // topics), derived from points-at-stake. Abstains when signal is thin.
+  rpc GetNextAction(generic.Empty) returns (NextAction);
+  // Per-section blueprint coverage map (which topics have study material). (F7)
+  rpc GetCoverageMap(generic.Empty) returns (CoverageMapResponse);
 }
 
 // Implicitly includes any of the above methods not listed here (delegated to
@@ -191,4 +205,48 @@ message PointsAtStakeTopic {
 message PointsAtStakeResponse {
   // Highest points-at-stake first.
   repeated PointsAtStakeTopic topics = 1;
+}
+
+// One missed question, with a clinical-reasoning reframe prompt. (PRD F3)
+message ErrorLogEntry {
+  string source = 1;
+  string external_id = 2;
+  int64 answered_at = 3;
+  string topic_id = 4;
+  string topic_name = 5;
+  // A short "why did I miss this?" reframe prompt (clinical-reasoning drill).
+  string reframe_prompt = 6;
+  // How many suspended cards this miss unsuspended (0 if none were mapped).
+  uint32 unsuspended_cards = 7;
+}
+
+message ErrorLogResponse {
+  // Most recent misses first.
+  repeated ErrorLogEntry entries = 1;
+}
+
+// The one recommended next block for the "Today" console hero.
+message NextAction {
+  // True when there isn't enough signal to recommend a block (honesty bar).
+  bool abstained = 1;
+  // e.g. "Study 20 cards across Cardiology, Nephrology".
+  string headline = 2;
+  uint32 block_size = 3;
+  repeated string topic_ids = 4;
+  string reason = 5;
+}
+
+// One blueprint section's coverage (does it have mapped cards to study?). (F7)
+message CoverageSection {
+  string topic_id = 1;
+  string name = 2;
+  double blueprint_weight = 3;
+  bool covered = 4;
+  uint32 mapped_cards = 5;
+}
+
+message CoverageMapResponse {
+  repeated CoverageSection sections = 1;
+  // Blueprint-weighted fraction of the exam that has study material (0..1).
+  double covered_pct = 2;
 }

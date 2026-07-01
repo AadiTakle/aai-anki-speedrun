@@ -92,4 +92,27 @@ impl crate::services::SpeedrunService for Collection {
         // Read-only ranked "Today's focus" view over the F1 topic store.
         self.points_at_stake()
     }
+
+    // --- Wave 2 (build-readiness plan): frozen stubs. Lane workers replace each
+    // with real logic + tests (F3 relink misses + error log; next-action; the
+    // coverage map). Defaults are the honest no-op / abstain.
+    fn relink_misses(&mut self) -> error::Result<anki_proto::collection::OpChanges> {
+        Ok(anki_proto::collection::OpChanges::default())
+    }
+
+    fn get_error_log(&mut self) -> error::Result<anki_proto::speedrun::ErrorLogResponse> {
+        Ok(anki_proto::speedrun::ErrorLogResponse::default())
+    }
+
+    fn get_next_action(&mut self) -> error::Result<anki_proto::speedrun::NextAction> {
+        Ok(anki_proto::speedrun::NextAction {
+            abstained: true,
+            reason: "not enough signal to recommend a block yet".to_string(),
+            ..Default::default()
+        })
+    }
+
+    fn get_coverage_map(&mut self) -> error::Result<anki_proto::speedrun::CoverageMapResponse> {
+        Ok(anki_proto::speedrun::CoverageMapResponse::default())
+    }
 }
