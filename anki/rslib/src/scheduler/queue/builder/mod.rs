@@ -7,6 +7,7 @@ pub(crate) mod intersperser;
 pub(crate) mod sized_chain;
 mod sorting;
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 
@@ -287,9 +288,13 @@ impl Collection {
 
         queues.gather_cards(self)?;
 
-        // Points-at-stake is a Rust post-sort of the gathered review cards by
-        // blueprint_weight(topic) * weakness(topic), descending. The SQL gather
-        // uses the Day order (see storage/card review_order_sql), then we
+        // Points-at-stake is a Rust post-reorder of the gathered review cards.
+        // Rather than a plain descending sort by
+        // blueprint_weight(topic) * weakness(topic) — which would block a whole
+        // topic back-to-back — it recency-decay *interleaves* topics so the
+        // highest points-at-stake topics come up early and often while still
+        // spreading topics out (see `sort_review_by_points_at_stake`). The SQL
+        // gather uses the Day order (see storage/card review_order_sql), then we
         // reorder the gathered set here, where the collection/config store is
         // available. Note: this reorders within the already-limit-capped gather
         // window (documented in docs/wednesday_plan.md §8).
@@ -304,34 +309,131 @@ impl Collection {
         Ok(queues)
     }
 
-    /// Stable-sort gathered review cards by points-at-stake
-    /// (`blueprint_weight * weakness`) descending. Cards with no topic mapping
-    /// (or whose topic lacks a weight/weakness) score 0.0 and sort last; equal
-    /// scores keep the gather-time order.
+    /// Reorder gathered review cards by **recency-decayed weighted
+    /// interleaving** of each card's topic points-at-stake
+    /// (`base = blueprint_weight * weakness`).
+    ///
+    /// A plain descending sort by `base` groups an entire topic into one
+    /// back-to-back block; interleaving keeps the highest-`base` topics coming
+    /// up early and often while still spreading topics out, so no single topic
+    /// dominates a long run. The reorder is deterministic and read-only (it
+    /// only permutes the gathered vec — no DB writes, no mutation).
+    ///
+    /// Algorithm:
+    /// 1. Partition cards, preserving gather order, into `positive` (topic
+    ///    `base > 0`) and `zero` (`base == 0`: unmapped card, or a topic with a
+    ///    missing/zero weight or weakness). `zero` cards keep their gather
+    ///    order and are appended last (preserving the prior "unmapped sorts
+    ///    last" behavior).
+    /// 2. Interleave `positive` by topic. Group its cards into per-topic FIFO
+    ///    queues (gather order within a topic). Start every involved topic at
+    ///    `recency = 1` (equal start ⇒ the first pick is the highest-`base`
+    ///    topic). Then loop until all queues are empty: for each topic with a
+    ///    non-empty queue compute `eff = base * recency`, pop the front card of
+    ///    the arg-max topic (tie-break: higher `base`, then the smaller gather
+    ///    index of the topic's next card — fully deterministic), then increment
+    ///    `recency` for every involved topic and reset the just-picked topic's
+    ///    `recency` to 0.
+    /// 3. Final order = interleaved positives, then the zero cards.
+    ///
+    /// Uses `f64`; non-finite scores are treated as 0 (so such cards sort
+    /// last). Equal-`base` topics with one card each fall through to the
+    /// gather-index tie-break, i.e. they keep gather order.
     fn sort_review_by_points_at_stake(&self, review: &mut [DueCard]) -> Result<()> {
         let topics = self.speedrun_topics()?;
         let weakness = self.speedrun_topic_weakness()?;
         let card_topics = self.speedrun_card_topics()?;
 
-        let points_at_stake = |card: &DueCard| -> f64 {
-            match card_topics.get(&card.id) {
-                Some(topic_id) => {
-                    let weight = topics
-                        .get(topic_id)
-                        .map(|t| t.blueprint_weight)
-                        .unwrap_or(0.0);
-                    let weak = weakness.get(topic_id).copied().unwrap_or(0.0);
-                    weight * weak
-                }
-                None => 0.0,
+        // base(topic) = blueprint_weight * weakness, guarded to a finite,
+        // strictly-positive value (anything else -> 0.0).
+        let base_for_topic = |topic_id: &str| -> f64 {
+            let weight = topics
+                .get(topic_id)
+                .map(|t| t.blueprint_weight)
+                .unwrap_or(0.0);
+            let weak = weakness.get(topic_id).copied().unwrap_or(0.0);
+            let base = weight * weak;
+            if base.is_finite() && base > 0.0 {
+                base
+            } else {
+                0.0
             }
         };
 
-        review.sort_by(|a, b| {
-            points_at_stake(b)
-                .partial_cmp(&points_at_stake(a))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        // Partition, preserving gather order: positive-base cards go into
+        // per-topic FIFO queues (of gather indices); zero-base cards are held
+        // aside to be appended last. `topic_order` records topics in first-seen
+        // order so iteration is deterministic.
+        let mut topic_order: Vec<String> = Vec::new();
+        let mut queues: HashMap<String, VecDeque<usize>> = HashMap::new();
+        let mut base_by_topic: HashMap<String, f64> = HashMap::new();
+        let mut zero: Vec<usize> = Vec::new();
+
+        for (idx, card) in review.iter().enumerate() {
+            let base = card_topics
+                .get(&card.id)
+                .map(|topic_id| base_for_topic(topic_id))
+                .unwrap_or(0.0);
+            if base > 0.0 {
+                // base > 0 implies a topic mapping exists.
+                let topic_id = card_topics.get(&card.id).unwrap();
+                if !queues.contains_key(topic_id) {
+                    topic_order.push(topic_id.clone());
+                    base_by_topic.insert(topic_id.clone(), base);
+                }
+                queues.entry(topic_id.clone()).or_default().push_back(idx);
+            } else {
+                zero.push(idx);
+            }
+        }
+
+        // Recency-decayed interleave of the positive-base cards.
+        let mut recency: HashMap<String, f64> =
+            topic_order.iter().map(|t| (t.clone(), 1.0)).collect();
+        let mut interleaved: Vec<usize> = Vec::with_capacity(review.len());
+        loop {
+            // Pick the highest-priority non-empty topic: max eff = base *
+            // recency, tie-break on higher base, then the smaller gather index
+            // of the topic's next card (globally unique ⇒ fully deterministic).
+            let next = topic_order
+                .iter()
+                .filter_map(|topic| {
+                    queues[topic]
+                        .front()
+                        .map(|&front| (topic, base_by_topic[topic] * recency[topic], front))
+                })
+                .max_by(|a, b| {
+                    a.1.partial_cmp(&b.1)
+                        .unwrap_or(Ordering::Equal)
+                        .then_with(|| {
+                            base_by_topic[a.0]
+                                .partial_cmp(&base_by_topic[b.0])
+                                .unwrap_or(Ordering::Equal)
+                        })
+                        // smaller gather index wins the final tie-break
+                        .then_with(|| b.2.cmp(&a.2))
+                });
+            let Some((topic, _eff, _front)) = next else {
+                break; // all queues empty
+            };
+            let topic = topic.clone();
+
+            let idx = queues.get_mut(&topic).unwrap().pop_front().unwrap();
+            interleaved.push(idx);
+
+            // Every involved topic ages by 1; the just-picked topic resets to 0.
+            for r in recency.values_mut() {
+                *r += 1.0;
+            }
+            recency.insert(topic, 0.0);
+        }
+
+        // Final order = interleaved positives, then the zero-base cards (which
+        // kept their gather order). Reorder `review` in place to match.
+        let mut order = interleaved;
+        order.extend(zero);
+        let reordered: Vec<DueCard> = order.iter().map(|&i| review[i]).collect();
+        review.copy_from_slice(&reordered);
         Ok(())
     }
 }
@@ -613,6 +715,73 @@ mod test {
             pas_order, gather_order,
             "equal points-at-stake must preserve gather order (stable sort)"
         );
+
+        Ok(())
+    }
+
+    /// R4 (product-owner redesign): points-at-stake no longer blocks a whole
+    /// topic back-to-back; it recency-decay interleaves topics by
+    /// `base = blueprint_weight * weakness`. With three topics of distinct base
+    /// (cardio 0.45, nephro 0.20, gastro 0.06) and three cards each, the queued
+    /// topic sequence must match the deterministic worked example exactly: the
+    /// dominant topic leads and recurs early/often, yet no topic is ever shown
+    /// twice in a row.
+    #[test]
+    fn points_at_stake_interleaves_by_recency() -> Result<()> {
+        let mut col = Collection::new();
+        let mut deck = col.get_or_create_normal_deck("Default").unwrap();
+        let nt = col.get_notetype_by_name("Basic")?.unwrap();
+
+        // Three topics, three cards each. base = weight * weakness:
+        // cardio 0.5*0.9=0.45, nephro 0.4*0.5=0.20, gastro 0.2*0.3=0.06.
+        let topic_ids = ["cardio", "nephro", "gastro"];
+        let mut card_topic: HashMap<CardId, &str> = HashMap::new();
+        let mut card_topics: Vec<(CardId, &str)> = Vec::new();
+        // Round-robin insertion so the gather order is interleaved; the topic
+        // sequence below is produced solely by the F5 recency interleave.
+        for _ in 0..3 {
+            for tid in topic_ids {
+                let cid = col.add_due_review_card(&nt, deck.id);
+                card_topic.insert(cid, tid);
+                card_topics.push((cid, tid));
+            }
+        }
+
+        col.seed_topic_weights(
+            &[("cardio", 0.5), ("nephro", 0.4), ("gastro", 0.2)],
+            &[("cardio", 0.9), ("nephro", 0.5), ("gastro", 0.3)],
+            &card_topics,
+        );
+
+        col.set_deck_review_order(&mut deck, ReviewCardOrder::PointsAtStake);
+        let seq: Vec<&str> = col
+            .queue_as_card_ids(deck.id)
+            .iter()
+            .map(|cid| card_topic[cid])
+            .collect();
+
+        // Exact deterministic sequence from the product-owner worked example.
+        assert_eq!(
+            seq,
+            vec![
+                "cardio", "nephro", "cardio", "gastro", "cardio", "nephro", "gastro", "nephro",
+                "gastro"
+            ],
+            "recency-decayed interleave must match the worked example"
+        );
+        // No topic is ever shown twice in a row (max consecutive run == 1).
+        assert!(
+            seq.windows(2).all(|w| w[0] != w[1]),
+            "no topic should repeat consecutively: {seq:?}"
+        );
+        // Each of the three topics appears exactly three times.
+        for tid in topic_ids {
+            assert_eq!(
+                seq.iter().filter(|t| **t == tid).count(),
+                3,
+                "topic {tid} should appear exactly 3 times"
+            );
+        }
 
         Ok(())
     }
