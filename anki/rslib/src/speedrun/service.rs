@@ -117,12 +117,15 @@ impl crate::services::SpeedrunService for Collection {
         self.coverage_map()
     }
 
-    // --- Wave 3 (real data): frozen stub. Lane A replaces with the aggregate
-    // store + source-replace + performance/weakness integration (speedrun::qbank).
+    // --- Wave 3 (real data): implemented. The inherent
+    // Collection::import_qbank_aggregate is selected over this trait method; it
+    // replaces the source's rows, ensures canonical blueprint topics, and
+    // returns the import counts undo-safely (F2, see speedrun::qbank). The
+    // aggregates feed performance scoring and weakness recompute.
     fn import_qbank_aggregate(
         &mut self,
-        _input: anki_proto::speedrun::ImportQbankAggregateRequest,
+        input: anki_proto::speedrun::ImportQbankAggregateRequest,
     ) -> error::Result<anki_proto::speedrun::ImportQbankAggregateResponse> {
-        Ok(anki_proto::speedrun::ImportQbankAggregateResponse::default())
+        Collection::import_qbank_aggregate(self, input.source, input.rows)
     }
 }

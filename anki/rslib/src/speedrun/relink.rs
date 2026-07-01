@@ -65,16 +65,19 @@ impl Collection {
     /// F3 — turn imported QBank misses into action, undo-safely.
     ///
     /// In a single transaction this:
-    /// 1. recomputes per-topic weakness = `1 - accuracy` from the stored QBank
-    ///    attempts, **replacing** any seeded weakness for topics with at least
-    ///    [`MIN_ATTEMPTS`] graded attempts (thin-data topics keep their prior
-    ///    weakness — the honesty guard);
+    /// 1. recomputes per-topic weakness = `1 - accuracy` from the student's
+    ///    COMBINED QBank accuracy (per-question attempts + source-tagged
+    ///    aggregates, see [`Collection::speedrun_qbank_topic_totals`]),
+    ///    **replacing** any seeded weakness for topics with at least
+    ///    [`MIN_ATTEMPTS`] combined graded questions (thin-data topics keep
+    ///    their prior weakness — the honesty guard);
     /// 2. auto-unsuspends the cards mapped (via the F1 crosswalk) to a topic
     ///    the student missed, but only those currently `Suspended` — cards of
     ///    topics with no miss are left untouched (the SPOV "selective
-    ///    unsuspension");
-    /// 3. appends one error-log entry per miss (deduped on `(source,
-    ///    external_id, answered_at)` so re-running is idempotent).
+    ///    unsuspension"). Driven by per-QUESTION misses only — aggregates carry
+    ///    no per-question miss records;
+    /// 3. appends one error-log entry per per-question miss (deduped on
+    ///    `(source, external_id, answered_at)` so re-running is idempotent).
     ///
     /// All three writes go through the standard config/card undo machinery, so
     /// a single `undo()` restores the prior weakness *and* the prior
@@ -82,11 +85,16 @@ impl Collection {
     pub(crate) fn relink_misses(&mut self) -> Result<OpChanges> {
         let attempts = self.speedrun_question_attempts()?;
         let card_topics = self.speedrun_card_topics()?;
+        // Aggregate QBank counts (correct, total) per topic, summed across
+        // sources — folded into the weakness tally so pasted aggregate data
+        // drives weakness -> points-at-stake even without per-question rows.
+        let aggregates = self.speedrun_qbank_topic_totals()?;
         // Start from the prior weakness; we overwrite only well-sampled topics.
         let mut new_weakness = self.speedrun_topic_weakness()?;
         let mut error_log = self.speedrun_error_log()?;
 
-        // Per-topic (correct, total) over attempts that carry a topic id.
+        // Per-topic (correct, total) over the COMBINED signal: per-question
+        // attempts (that carry a topic id) plus the aggregate rows.
         let mut tally: HashMap<String, (u32, u32)> = HashMap::new();
         for a in &attempts {
             if a.topic_id.is_empty() {
@@ -98,9 +106,17 @@ impl Collection {
                 entry.0 += 1;
             }
         }
+        for (topic_id, (correct, total)) in &aggregates {
+            if topic_id.is_empty() {
+                continue;
+            }
+            let entry = tally.entry(topic_id.clone()).or_insert((0, 0));
+            entry.0 = entry.0.saturating_add(*correct);
+            entry.1 = entry.1.saturating_add(*total);
+        }
 
-        // Overwrite only the topics with enough data; thin-data / no-data
-        // topics keep their prior weakness (the honesty guard).
+        // Overwrite only the topics with enough COMBINED data; thin-data /
+        // no-data topics keep their prior weakness (the honesty guard).
         for (topic_id, (correct, total)) in &tally {
             if *total >= MIN_ATTEMPTS {
                 let accuracy = f64::from(*correct) / f64::from(*total);
@@ -236,6 +252,7 @@ fn error_key_from(a: &StoredQuestionAttempt) -> ErrorKey {
 #[cfg(test)]
 mod test {
     use anki_proto::speedrun::CardTopic;
+    use anki_proto::speedrun::QbankTopicResult;
     use anki_proto::speedrun::SetTopicWeightsRequest;
     use anki_proto::speedrun::Topic;
     use anki_proto::speedrun::TopicWeakness;
@@ -245,6 +262,20 @@ mod test {
     use crate::card::CardType;
     use crate::services::SpeedrunService;
     use crate::speedrun::attempts::StoredQuestionAttempt;
+
+    /// Import a single aggregate row for `topic` under `source`.
+    fn seed_aggregate(col: &mut Collection, source: &str, topic: &str, correct: u32, total: u32) {
+        let _ = col
+            .import_qbank_aggregate(
+                source.into(),
+                vec![QbankTopicResult {
+                    topic_id: topic.into(),
+                    correct,
+                    total,
+                }],
+            )
+            .unwrap();
+    }
 
     /// A stored QBank attempt for a given topic (source fixed; ids/times vary).
     fn attempt(
@@ -535,6 +566,69 @@ mod test {
         // renal's miss unsuspended its 1 card; cardio's miss unsuspended its 2.
         assert_eq!(resp.entries[0].unsuspended_cards, 1);
         assert_eq!(resp.entries[1].unsuspended_cards, 2);
+        Ok(())
+    }
+
+    /// Aggregate integration: weakness is recomputed from imported aggregate
+    /// accuracy (low accuracy -> high weakness) even with no per-question
+    /// attempts, and `undo()` restores the prior weakness.
+    #[test]
+    fn weakness_reflects_aggregate_accuracy_and_undo_restores() -> Result<()> {
+        let mut col = Collection::new();
+        // cardio exists only via imported aggregate (import ensures the canonical
+        // topic); 10/100 -> accuracy 0.1 -> weakness 0.9.
+        seed_aggregate(&mut col, "uworld", "cardio", 10, 100);
+        let before = col.speedrun_topic_weakness()?.get("cardio").copied();
+
+        let _ = col.relink_misses()?;
+        let w = *col
+            .speedrun_topic_weakness()?
+            .get("cardio")
+            .expect("cardio weakness");
+        assert!(
+            (w - 0.9).abs() < 1e-9,
+            "low aggregate accuracy 0.1 -> weakness 0.9, got {w}"
+        );
+
+        col.undo()?;
+        assert_eq!(
+            col.speedrun_topic_weakness()?.get("cardio").copied(),
+            before,
+            "undo restored the prior weakness"
+        );
+
+        let integrity: String = col
+            .storage
+            .db
+            .pragma_query_value(None, "integrity_check", |row| row.get(0))
+            .unwrap();
+        assert_eq!(integrity, "ok");
+        Ok(())
+    }
+
+    /// The MIN_ATTEMPTS gate is on the COMBINED total: a topic with only 3
+    /// per-question attempts (below the floor) becomes well-sampled once its
+    /// aggregate rows are folded in, and weakness reflects the combined
+    /// accuracy.
+    #[test]
+    fn combined_attempts_and_aggregates_drive_weakness() -> Result<()> {
+        let mut col = Collection::new();
+        seed_topics(&mut col, &[("cardio", "Cardiology", 0.5)], &[]);
+        // 3 correct per-question attempts (below MIN_ATTEMPTS on their own).
+        let mut attempts = Vec::new();
+        for i in 0..3i64 {
+            attempts.push(attempt(&format!("c{i}"), 1000 + i, "cardio", true));
+        }
+        let _ = col.import_qbank_data(attempts, vec![])?;
+        // Aggregate 2/97 -> combined 5 correct / 100 total -> accuracy 0.05.
+        seed_aggregate(&mut col, "uworld", "cardio", 2, 97);
+
+        let _ = col.relink_misses()?;
+        let w = *col.speedrun_topic_weakness()?.get("cardio").unwrap();
+        assert!(
+            (w - 0.95).abs() < 1e-9,
+            "combined 5/100 -> weakness 0.95, got {w}"
+        );
         Ok(())
     }
 }

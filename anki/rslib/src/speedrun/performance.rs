@@ -2,16 +2,21 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 //! **Performance** (application / accuracy) score — the second of the three
-//! Speedrun scores, derived from the student's imported QBank question attempts
-//! (PRD F2). Same honesty-bar shape as the F6 [`super::score`] memory score: a
-//! point estimate with an uncertainty band, a real coverage figure, explicit
-//! reasons, and an explicit abstain ("we can't score yet") rule. Read-only: it
-//! never mutates the collection.
+//! Speedrun scores, derived from the student's imported QBank data:
+//! per-question attempts (PRD F2) **combined** with source-tagged per-topic
+//! aggregates (see [`Collection::speedrun_qbank_topic_totals`]), so a topic
+//! backed only by pasted aggregate counts still scores. Same honesty-bar shape
+//! as the F6 [`super::score`] memory score: a point estimate with an
+//! uncertainty band, a real coverage figure, explicit reasons, and an explicit
+//! abstain ("we can't score yet") rule. Read-only: it never mutates the
+//! collection.
 //!
 //! Definitions (frozen contract):
 //! - **covered topic**: a taxonomy topic (present in
-//!   [`Collection::speedrun_topics`]) that has at least one graded attempt.
-//! - **per-topic (`n` attempts, `k` correct)**:
+//!   [`Collection::speedrun_topics`]) that has at least one graded question (a
+//!   per-question attempt or an aggregate row).
+//! - **per-topic (`n` questions, `k` correct)** — `n`/`k` are the per-question
+//!   attempts PLUS the aggregate `(total, correct)` for the topic:
 //!   - `accuracy` = the Beta-Binomial posterior mean under a uniform
 //!     `Beta(1,1)` prior — the Laplace rule `(k + 1) / (n + 2)`, in `[0, 1]`.
 //!   - `[low, high]` = the dependency-free **Wilson score interval at 90%** (`z
@@ -20,8 +25,10 @@
 //!     accuracy <= high`, and its half-width is strictly positive so the band
 //!     is never degenerate.
 //! - **point**: `100 * (Σ weight*accuracy) / (Σ weight)` over covered topics,
-//!   clamped to `[0, 100]`. When the covered weight is `0` there is no honest
-//!   basis for a weighted number, so we abstain.
+//!   clamped to `[0, 100]`. The `weight` is the topic's blueprint weight, or —
+//!   when that is `0`/absent — an **equal-weight fallback** (the mean of the
+//!   positive covered weights, or `1.0` if none are positive) so a covered
+//!   topic is never silently dropped from the score.
 //! - **low / high**: the same blueprint-weighted aggregation of the per-topic
 //!   `low` / `high` (`×100`), clamped to `[0, 100]`; because every per-topic
 //!   band brackets its accuracy and is strictly positive, the aggregate
@@ -30,11 +37,12 @@
 //! - **coverage_pct**: `100 * (Σ weight over covered topics) / (Σ weight over
 //!   ALL taxonomy topics)`; `0.0` when the total taxonomy weight is `0`.
 //! - **ABSTAIN RULE (frozen):** `abstained = (total_attempts < 50)`, where
-//!   `total_attempts` is the sum of `n` over covered topics; plus a covered-
-//!   weight guard (abstain when the covered weight is `0`, since a weighted
-//!   mean is undefined). When abstained, `point/low/high` are all `0.0` while
-//!   the real `coverage_pct` and the per-topic `topics` breakdown are still
-//!   reported, and `reasons` names the shortfall with numbers.
+//!   `total_attempts` is the COMBINED sum of `n` (attempts + aggregates) over
+//!   covered topics; plus a guard for zero effective covered weight (no covered
+//!   topic has any data, so a weighted mean is undefined). When abstained,
+//!   `point/low/high` are all `0.0` while the real `coverage_pct` and the
+//!   per-topic `topics` breakdown are still reported, and `reasons` names the
+//!   shortfall with numbers.
 //! - **updated_at**: `TimestampSecs::now().0`.
 
 use std::collections::BTreeMap;
@@ -58,10 +66,14 @@ impl Collection {
     pub(crate) fn performance_score(&mut self) -> Result<PerformanceScore> {
         let attempts = self.speedrun_question_attempts()?;
         let taxonomy = self.speedrun_topics()?;
+        // Aggregate QBank counts (correct, total) per topic, summed across
+        // sources — folded together with the per-question attempts below so a
+        // topic backed only by pasted aggregates still scores.
+        let aggregates = self.speedrun_qbank_topic_totals()?;
 
-        // Group graded attempts by (non-empty) topic id -> (n attempts, k
-        // correct). A BTreeMap keeps the per-topic output ordered by topic id so
-        // the response is deterministic regardless of import/storage order.
+        // Combined per-topic (n attempts, k correct): per-question attempts PLUS
+        // aggregate rows. A BTreeMap keeps the per-topic output ordered by topic
+        // id so the response is deterministic regardless of import/storage order.
         let mut grouped: BTreeMap<String, (u32, u32)> = BTreeMap::new();
         for a in &attempts {
             if a.topic_id.is_empty() {
@@ -73,18 +85,24 @@ impl Collection {
                 entry.1 += 1;
             }
         }
+        for (topic_id, (correct, total)) in &aggregates {
+            if topic_id.is_empty() {
+                continue;
+            }
+            let entry = grouped.entry(topic_id.clone()).or_insert((0, 0));
+            entry.0 = entry.0.saturating_add(*total);
+            entry.1 = entry.1.saturating_add(*correct);
+        }
 
         // Per-topic Beta-Binomial breakdown, emitted for every topic that has
-        // attempts (taxonomy-mapped or not). Only "covered" topics — those in
-        // the taxonomy — feed the blueprint-weighted aggregate.
+        // data (taxonomy-mapped or not). Only "covered" topics — those in the
+        // taxonomy — feed the blueprint-weighted aggregate. Covered topics are
+        // collected as (raw blueprint weight, accuracy, low, high, n) for the
+        // two-pass weighting (the equal-weight fallback needs all weights first).
         let total_weight: f64 = taxonomy.values().map(|t| t.blueprint_weight).sum();
         let mut topics_out: Vec<TopicPerformance> = Vec::with_capacity(grouped.len());
+        let mut covered: Vec<(f64, f64, f64, f64, u32)> = Vec::new();
         let mut covered_weight = 0.0f64;
-        let mut total_attempts: u32 = 0;
-        let mut covered_topics: u32 = 0;
-        let mut weighted_accuracy_sum = 0.0f64;
-        let mut weighted_low_sum = 0.0f64;
-        let mut weighted_high_sum = 0.0f64;
 
         for (topic_id, (n, k)) in &grouped {
             let (n, k) = (*n, *k);
@@ -102,39 +120,55 @@ impl Collection {
             });
 
             if let Some(info) = taxonomy.get(topic_id) {
-                let weight = info.blueprint_weight;
-                covered_weight += weight;
-                total_attempts = total_attempts.saturating_add(n);
-                covered_topics += 1;
-                weighted_accuracy_sum += weight * accuracy;
-                weighted_low_sum += weight * low;
-                weighted_high_sum += weight * high;
+                covered_weight += info.blueprint_weight;
+                covered.push((info.blueprint_weight, accuracy, low, high, n));
             }
         }
 
+        let total_attempts: u32 = covered.iter().fold(0u32, |acc, c| acc.saturating_add(c.4));
+        let covered_topics = covered.len() as u32;
+
+        // Coverage stays a *blueprint* figure: covered raw weight over total raw
+        // weight. (A covered topic with no blueprint weight adds 0 here, but is
+        // still scored below via the equal-weight fallback.)
         let coverage_pct = if total_weight > 0.0 {
             100.0 * covered_weight / total_weight
         } else {
             0.0
         };
 
+        // Equal-weight fallback (documented): rather than dropping a covered
+        // topic that has no positive blueprint weight — which would silently
+        // exclude its accuracy from the score — give it the mean of the positive
+        // covered weights so it still contributes as a typical topic. If NO
+        // covered topic has a positive weight, every covered topic is weighted
+        // equally (1.0), i.e. a plain unweighted average.
+        let positive: Vec<f64> = covered.iter().map(|c| c.0).filter(|w| *w > 0.0).collect();
+        let fallback_weight = if positive.is_empty() {
+            1.0
+        } else {
+            positive.iter().sum::<f64>() / positive.len() as f64
+        };
+        let effective = |w: f64| if w > 0.0 { w } else { fallback_weight };
+        let effective_covered_weight: f64 = covered.iter().map(|c| effective(c.0)).sum();
+
         let updated_at = TimestampSecs::now().0;
 
-        // Frozen abstain rule: fewer than MIN_TOTAL_ATTEMPTS graded attempts over
-        // covered topics. A covered-weight of 0 also abstains — a weighted mean is
-        // undefined there, so emitting a number would be unbacked (honesty bar).
-        let abstained = total_attempts < MIN_TOTAL_ATTEMPTS || covered_weight <= 0.0;
+        // Frozen abstain rule, gated on the COMBINED total (attempts +
+        // aggregates) over covered topics: fewer than MIN_TOTAL_ATTEMPTS
+        // questions abstains. A zero effective covered weight (i.e. no covered
+        // topic has data at all) also abstains — a weighted mean is undefined
+        // there, so emitting a number would be unbacked (honesty bar).
+        let abstained = total_attempts < MIN_TOTAL_ATTEMPTS || effective_covered_weight <= 0.0;
         if abstained {
             let mut reasons = Vec::new();
             if total_attempts < MIN_TOTAL_ATTEMPTS {
                 reasons.push(format!(
-                    "only {total_attempts} graded attempts (< {MIN_TOTAL_ATTEMPTS} required)"
+                    "only {total_attempts} graded questions (< {MIN_TOTAL_ATTEMPTS} required)"
                 ));
             }
-            if covered_weight <= 0.0 {
-                reasons.push(
-                    "covered topics carry no blueprint weight (cannot weight a score)".to_string(),
-                );
+            if effective_covered_weight <= 0.0 {
+                reasons.push("no covered blueprint topics with data to score".to_string());
             }
             return Ok(PerformanceScore {
                 abstained: true,
@@ -148,20 +182,24 @@ impl Collection {
             });
         }
 
-        // Blueprint-weighted aggregation over covered topics (covered_weight > 0
-        // is guaranteed here). Each per-topic band brackets its own accuracy, so
-        // mathematically low <= point <= high already holds; the final min/max
-        // only guards that invariant against floating-point rounding.
-        let point = (100.0 * weighted_accuracy_sum / covered_weight).clamp(0.0, 100.0);
-        let low = (100.0 * weighted_low_sum / covered_weight)
+        // Weighted aggregation over covered topics using the effective weights
+        // (effective_covered_weight > 0 is guaranteed here). Each per-topic band
+        // brackets its own accuracy, so mathematically low <= point <= high
+        // already holds; the final min/max only guards that against fp rounding.
+        let weighted_accuracy_sum: f64 = covered.iter().map(|c| effective(c.0) * c.1).sum();
+        let weighted_low_sum: f64 = covered.iter().map(|c| effective(c.0) * c.2).sum();
+        let weighted_high_sum: f64 = covered.iter().map(|c| effective(c.0) * c.3).sum();
+
+        let point = (100.0 * weighted_accuracy_sum / effective_covered_weight).clamp(0.0, 100.0);
+        let low = (100.0 * weighted_low_sum / effective_covered_weight)
             .clamp(0.0, 100.0)
             .min(point);
-        let high = (100.0 * weighted_high_sum / covered_weight)
+        let high = (100.0 * weighted_high_sum / effective_covered_weight)
             .clamp(0.0, 100.0)
             .max(point);
 
         let reasons = vec![
-            format!("{total_attempts} graded attempts"),
+            format!("{total_attempts} graded questions"),
             format!("coverage {coverage_pct:.1}% of blueprint"),
             format!("weighted accuracy {point:.1}%"),
             format!("{covered_topics} covered topics"),
@@ -202,6 +240,7 @@ fn wilson_interval(k: u32, n: u32, z: f64) -> (f64, f64) {
 #[cfg(test)]
 mod test {
     use anki_proto::speedrun::CardTopic;
+    use anki_proto::speedrun::QbankTopicResult;
     use anki_proto::speedrun::SetTopicWeightsRequest;
     use anki_proto::speedrun::Topic;
 
@@ -251,6 +290,20 @@ mod test {
             .iter()
             .find(|t| t.topic_id == topic_id)
             .unwrap_or_else(|| panic!("topic {topic_id} missing from {:?}", score.topics))
+    }
+
+    /// Import a single aggregate row for `topic` under `source`.
+    fn seed_aggregate(col: &mut Collection, source: &str, topic: &str, correct: u32, total: u32) {
+        let _ = col
+            .import_qbank_aggregate(
+                source.into(),
+                vec![QbankTopicResult {
+                    topic_id: topic.into(),
+                    correct,
+                    total,
+                }],
+            )
+            .unwrap();
     }
 
     /// 1. Fewer than 50 graded attempts across covered topics -> abstain:
@@ -463,6 +516,101 @@ mod test {
         assert_eq!(mystery.attempts, 60);
         assert_eq!(mystery.correct, 40);
         assert!(!score.reasons.is_empty());
+        Ok(())
+    }
+
+    /// 6. Aggregate integration: a topic with ONLY imported aggregate data (no
+    ///    per-question attempts) still gets a per-topic accuracy and
+    ///    contributes to the overall performance score. `import` auto-adds the
+    ///    canonical blueprint topic so it counts as covered.
+    #[test]
+    fn aggregate_only_topic_scores_and_contributes() -> Result<()> {
+        let mut col = Collection::new();
+        // No taxonomy or attempts seeded — cardio exists solely as aggregate.
+        seed_aggregate(&mut col, "uworld", "cardio", 40, 60);
+
+        let score = col.performance_score()?;
+        assert!(!score.abstained, "60 aggregate questions >= 50 must score");
+        let cardio = find_topic(&score, "cardio");
+        assert_eq!(cardio.attempts, 60, "combined n comes from the aggregate");
+        assert_eq!(cardio.correct, 40);
+        let expected = 41.0 / 62.0; // Laplace (k + 1) / (n + 2)
+        assert!(
+            (cardio.accuracy - expected).abs() < 1e-9,
+            "accuracy {} should be the Laplace mean {expected}",
+            cardio.accuracy
+        );
+        assert!(
+            score.point > 0.0,
+            "aggregate-only topic must contribute to the overall score"
+        );
+        assert!(
+            score.coverage_pct > 0.0,
+            "covered via the auto-added canonical blueprint weight"
+        );
+        Ok(())
+    }
+
+    /// 7. Per-question attempts and aggregates COMBINE per topic before the
+    ///    Beta-Binomial math.
+    #[test]
+    fn attempts_and_aggregates_combine_per_topic() -> Result<()> {
+        let mut col = Collection::new();
+        seed_topics(&mut col, &[("cardio", 1.0)]);
+        seed_attempts(&mut col, "cardio", 30, 20); // 30 attempts, 20 correct
+        seed_aggregate(&mut col, "uworld", "cardio", 25, 30); // + 30, 25 correct
+
+        let score = col.performance_score()?;
+        assert!(!score.abstained, "60 combined >= 50");
+        let cardio = find_topic(&score, "cardio");
+        assert_eq!(cardio.attempts, 60, "30 attempts + 30 aggregate");
+        assert_eq!(cardio.correct, 45, "20 + 25 correct");
+        let expected = 46.0 / 62.0; // (k + 1) / (n + 2)
+        assert!(
+            (cardio.accuracy - expected).abs() < 1e-9,
+            "combined accuracy {} vs {expected}",
+            cardio.accuracy
+        );
+        Ok(())
+    }
+
+    /// 8. Two different sources COMBINE per topic in the performance score.
+    #[test]
+    fn two_sources_combine_in_performance() -> Result<()> {
+        let mut col = Collection::new();
+        seed_topics(&mut col, &[("cardio", 1.0)]);
+        seed_aggregate(&mut col, "uworld", "cardio", 20, 30);
+        seed_aggregate(&mut col, "amboss", "cardio", 25, 30);
+
+        let score = col.performance_score()?;
+        assert!(!score.abstained, "60 combined across sources >= 50");
+        let cardio = find_topic(&score, "cardio");
+        assert_eq!(cardio.attempts, 60, "20/30 + 25/30 -> 45/60");
+        assert_eq!(cardio.correct, 45);
+        Ok(())
+    }
+
+    /// 9. Equal-weight fallback: a covered topic with no positive blueprint
+    ///    weight is scored under equal weighting rather than dropped (which
+    ///    would leave zero covered weight and force an abstain).
+    #[test]
+    fn zero_weight_covered_topic_uses_equal_weight_fallback() -> Result<()> {
+        let mut col = Collection::new();
+        // cardio is in the taxonomy but carries NO blueprint weight (0.0).
+        seed_topics(&mut col, &[("cardio", 0.0)]);
+        seed_attempts(&mut col, "cardio", 60, 30); // 60 attempts, 30 correct
+
+        let score = col.performance_score()?;
+        assert!(
+            !score.abstained,
+            "weightless covered topic is scored via equal-weight fallback"
+        );
+        let expected_point = 100.0 * 31.0 / 62.0; // single topic -> 100 * Laplace mean
+        assert!(
+            (score.point - expected_point).abs() < 1e-6,
+            "point {} should be the topic's accuracy under equal weighting",
+            score.point
+        );
         Ok(())
     }
 

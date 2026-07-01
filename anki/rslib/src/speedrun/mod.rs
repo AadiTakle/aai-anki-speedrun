@@ -16,6 +16,7 @@ pub mod focus;
 pub mod mastery;
 mod next_action;
 mod performance;
+mod qbank;
 mod relink;
 pub mod score;
 mod service;
