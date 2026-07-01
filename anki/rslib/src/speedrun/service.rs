@@ -75,11 +75,7 @@ impl crate::services::SpeedrunService for Collection {
     }
 
     fn get_performance_score(&mut self) -> error::Result<anki_proto::speedrun::PerformanceScore> {
-        Ok(anki_proto::speedrun::PerformanceScore {
-            abstained: true,
-            reasons: vec!["no QBank attempts imported yet".to_string()],
-            ..Default::default()
-        })
+        self.performance_score()
     }
 
     fn get_readiness_score(&mut self) -> error::Result<anki_proto::speedrun::ReadinessScore> {
