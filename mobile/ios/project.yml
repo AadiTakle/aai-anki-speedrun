@@ -1,0 +1,94 @@
+name: Speedrun
+# XcodeGen spec for the Speedrun iOS Simulator app (W2 / Lane E).
+#
+# Two targets, matching the design already baked into the Swift sources:
+#   * SpeedrunKit (framework) -- compiles the idiomatic Swift wrapper
+#     (SpeedrunEngine) + the SwiftUI ReviewView, and LINKS the shared Rust
+#     engine via SpeedrunFFI.xcframework (built by ./build-xcframework.sh).
+#     `import SpeedrunFFI` resolves to the xcframework's clang module.
+#   * SpeedrunApp (application) -- the @main SwiftUI app. It only
+#     `import SpeedrunKit`; SpeedrunApp.swift already guards on
+#     `canImport(SpeedrunKit)`, so it works here unmodified.
+#
+# Regenerate with:  xcodegen generate   (run from mobile/ios/)
+# The .xcframework must exist first (run ./build-xcframework.sh).
+
+options:
+  bundleIdPrefix: com.speedrun
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    # Simulator builds don't need signing; keep it off so xcodebuild works
+    # headlessly with no provisioning profile / dev team.
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_IDENTITY: ""
+    SWIFT_VERSION: "5.0"
+    ONLY_ACTIVE_ARCH: "YES"
+
+targets:
+  SpeedrunKit:
+    type: framework
+    platform: iOS
+    sources:
+      - path: Sources/SpeedrunKit
+    dependencies:
+      # Static-library xcframework: link it (embed:false); its Headers/
+      # module.modulemap makes `import SpeedrunFFI` available.
+      - framework: build/SpeedrunFFI.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.speedrun.SpeedrunKit
+        DEFINES_MODULE: "YES"
+        # Embedded frameworks must carry an Info.plist or app-bundle
+        # validation fails; let Xcode synthesize one.
+        GENERATE_INFOPLIST_FILE: "YES"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # The Rust staticlib pulls in these system libs/frameworks; resolve
+        # them where the archive is consumed (this dynamic framework).
+        OTHER_LDFLAGS:
+          - "-liconv"
+          - "-lc++"
+          - "-lresolv"
+          - "-framework"
+          - "Security"
+          - "-framework"
+          - "SystemConfiguration"
+          - "-framework"
+          - "CoreFoundation"
+
+  SpeedrunApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - target: SpeedrunKit
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.speedrun.ios
+        GENERATE_INFOPLIST_FILE: "YES"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_KEY_CFBundleDisplayName: "Speedrun"
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+schemes:
+  SpeedrunApp:
+    build:
+      targets:
+        SpeedrunApp: all
+    run:
+      config: Debug
+    test:
+      config: Debug

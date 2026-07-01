@@ -1,0 +1,93 @@
+==================================================================
+W1 clean-machine verification  (arch: aarch64, 2026-07-01T17:55:42Z)
+This box has NO build toolchain:
+  confirmed: no cargo/rustc/gcc/uv/n2 on PATH
+==================================================================
+== artifact ==
+-rw-r--r-- 1 root root 190937014 Jul  1 17:32 /src/anki/out/installer/dist/anki-26.5-linux-aarch64.tar.zst
+== extract (zstd --long) ==
+extracted bundle:
+total 160
+drwxr-xr-x  5 root root  4096 Jul  1 17:31 .
+drwxr-xr-x  3 root root  4096 Jul  1 17:55 ..
+-rw-r--r--  1 root root  1796 Jul  1 17:31 LICENSE
+-rw-r--r--  1 root root   564 Jul  1 17:31 README.md
+-rwxr-xr-x  1 root root 67496 Jul  1 17:31 anki
+-rw-r--r--  1 root root  2212 Jul  1 17:31 anki.1
+-rw-r--r--  1 root root   520 Jul  1 17:31 anki.desktop
+-rw-r--r--  1 root root 34595 Jul  1 17:31 anki.png
+-rw-r--r--  1 root root   640 Jul  1 17:31 anki.xml
+-rw-r--r--  1 root root  6324 Jul  1 17:31 anki.xpm
+drwxr-xr-x  4 root root  4096 Jul  1 17:31 app
+drwxr-xr-x 73 root root  4096 Jul  1 17:31 app_packages
+-rwxr-xr-x  1 root root  2551 Jul  1 17:31 install.sh
+drwxr-xr-x  6 root root  4096 Jul  1 17:31 python
+-rwxr-xr-x  1 root root   408 Jul  1 17:31 uninstall.sh
+bundle size: 673M
+
+########## [smoke 1] /root/ankitest/anki-linux/anki --version (bundle + Qt/WebEngine libs load) ##########
+Starting Anki 26.05...
+Anki 26.05
+smoke1 exit=0
+
+########## [smoke 2] engine: create a collection with the bundled runtime (AI off) ##########
+bundled interpreter: /root/ankitest/anki-linux/python/bin/python3.13
+anki version: 26.05 buildhash: bb741ecd
+note_count: 1 card_count: 1
+root/ankitest/w1_smoke.py:17:reset() is deprecated: no longer required
+scheduler reset OK (rust queue exercised)
+ENGINE_SMOKE_OK
+smoke2 exit=0
+smoke2 OK (collection.anki2 created)
+
+########## [smoke 3] GUI launch under xvfb (headless, AI off) ##########
+-- pre-seeding defaultLang via bundled ProfileManager (skips first-run chooser) --
+pre-seeded prefs21.db defaultLang=en_US (firstTime will be False)
+collection.anki2 created after 2s
+--- X windows present ---
+Anki
+Openbox
+Qt Selection Owner for Anki
+User 1 - Anki
+--- screenshot (main window if reached) ---
+saved /out/linux-clean-screenshot.png
+--- graceful quit (Ctrl+Q to Anki window) ---
+gui process final exit=0
+GUI_COLLECTION_CREATED=1
+== GUI log (tail) ==
+Starting Anki 26.05...
+Qt warning: Detected locale "C" with character encoding "ANSI_X3.4-1968", which is not UTF-8.
+Qt depends on a UTF-8 locale, and has switched to "C.UTF-8" instead.
+If this causes problems, reconfigure your locale. See the locale(1) manual
+for more information. 
+2026-07-01 17:55:45,443:INFO:aqt.mediasrv: Serving on http://127.0.0.1:35011
+Qt info: Sandboxing disabled by user. 
+Qt warning: Failed to create Vulkan instance: -9 
+Qt warning: Failed to create platform Vulkan instance 
+Detected locale "C" with character encoding "ANSI_X3.4-1968", which is not UTF-8.
+Qt depends on a UTF-8 locale, and has switched to "C.UTF-8" instead.
+If this causes problems, reconfigure your locale. See the locale(1) manual
+for more information.
+[72:113:0701/175545.522742:ERROR:../../../qtwebengine/src/3rdparty/chromium/dbus/bus.cc:408] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory
+Detected locale "C" with character encoding "ANSI_X3.4-1968", which is not UTF-8.
+Qt depends on a UTF-8 locale, and has switched to "C.UTF-8" instead.
+If this causes problems, reconfigure your locale. See the locale(1) manual
+for more information.
+Starting main loop...
+mpv not found, reverting to mplayer
+2026-07-01 17:56:12,747:WARNING:waitress: unhandled close event
+== base dir tree (proves profile+collection written) ==
+<base>
+<base>/README.txt
+<base>/prefs21.db
+<base>/addons21
+<base>/User 1
+<base>/User 1/backups
+<base>/User 1/collection.media
+<base>/User 1/collection.anki2
+<base>/logs
+smoke3 OK (GUI launched and created a collection with AI off)
+
+==================================================================
+W1 CLEAN-MACHINE SMOKE: PASS (bundle loads + engine creates a collection, AI off)
+==================================================================

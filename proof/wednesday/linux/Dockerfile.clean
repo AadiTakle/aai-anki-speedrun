@@ -1,0 +1,37 @@
+# W1 — CLEAN machine verification image (Lane B/F infra)
+#
+# A fresh ubuntu:24.04 with ONLY Anki's *runtime* shared libraries (NO build
+# toolchain: no rust/cargo/n2/uv/gcc, no wheels, no source) plus a headless X
+# harness (xvfb) so the produced installer can be launched and smoke-tested as if
+# on an end-user machine. AI is out of scope for the MVP; the app is launched
+# with AI off (--safemode disables add-ons + auto-sync).
+#
+# Build: docker build -f Dockerfile.clean -t anki-linux-clean:w1 .
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# (A) ANKI RUNTIME LIBRARIES — what a clean desktop needs to run the bundle.
+#     Superset of qt/installer/linux-template/.../install.sh DEBIAN_DEPS plus the
+#     Qt WebEngine/Chromium shared libs and a software GL stack (for headless GL).
+# (B) TEST HARNESS ONLY — not required by Anki; used to run/observe it headlessly:
+#     xvfb + xauth (virtual display), xdotool (dismiss/quit), x11-apps + imagemagick
+#     (screenshot), fonts-dejavu-core (text render), zstd/tar (extract artifact).
+RUN apt-get update && apt-get install --yes --no-install-recommends \
+      libdbus-1-3 libfontconfig1 libfreetype6 libgl1 libnss3 libnspr4 \
+      libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+      libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxcb-cursor0 \
+      libxcomposite1 libxcursor1 libxi6 libxkbcommon0 libxkbcommon-x11-0 \
+      libxrandr2 libxrender1 libxtst6 libxdamage1 libxfixes3 libxkbfile1 \
+      libglib2.0-0t64 libegl1 libpulse-mainloop-glib0 \
+      libgstreamer1.0-0 libgstreamer-gl1.0-0 libgstreamer-plugins-base1.0-0 \
+      libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libcups2t64 \
+      libdrm2 libgbm1 libpango-1.0-0 libpangocairo-1.0-0 libcairo2 \
+      libasound2t64 libxshmfence1 libxext6 libexpat1 \
+      libsnappy1v5 libminizip1 \
+      libgl1-mesa-dri libglx-mesa0 libegl-mesa0 \
+      xvfb xauth xdotool x11-apps imagemagick fonts-dejavu-core openbox \
+      zstd tar ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /root

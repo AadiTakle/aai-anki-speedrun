@@ -1,0 +1,47 @@
+======================================================================
+Speedrun feature interactivity proof — real backend, real computation
+======================================================================
+
+== F1  topic store (persist + undo) ==
+    PASS  after set_topic_weights, taxonomy has 1 topic: actual=1 expected=1
+    PASS  stored topic id round-trips: actual='cardio' expected='cardio'
+    PASS  after undo(), taxonomy reverts to empty: actual=0 expected=0
+
+== F4  mastery query (computes mastered/total/recall from cards) ==
+    input: 4 cards mapped to cardio (2 mature+memory, 1 young, 1 suspended-mature)
+    PASS  total (suspended excluded): actual=3 expected=3
+    PASS  mastered (mature, non-suspended): actual=2 expected=2
+    PASS  recall_card_count (memory-backed): actual=2 expected=2
+    PASS  avg_recall in (0,1] (avg_recall=1.000)
+
+== F5  points-at-stake queue (order is computed from weight x weakness) ==
+proof/wednesday/feature_proof.py:91:reset() is deprecated: no longer required
+proof/wednesday/feature_proof.py:91:reset() is deprecated: no longer required
+    weights X=0.9 Y=0.5 Z=0.1 -> order topics: ['X', 'Y', 'Z']
+    PASS  highest-weight topic (X) is first: actual='X' expected='X'
+    PASS  lowest-weight topic (Z) is last: actual='Z' expected='Z'
+proof/wednesday/feature_proof.py:91:reset() is deprecated: no longer required
+    weights X=0.1 Y=0.5 Z=0.9 -> order topics: ['Z', 'Y', 'X']
+    PASS  after flip, Z is first: actual='Z' expected='Z'
+    PASS  after flip, X is last: actual='X' expected='X'
+    PASS  order actually CHANGED with the inputs (not static: same fn, different weights -> different order)
+    (DAY/feature-off order for contrast: ['X', 'Z', 'Y'])
+
+== F6  memory score (honest abstain -> range; reacts to data) ==
+    [A fresh] abstained=TRUE   coverage=  0.0%  reasons=['only 0 graded reviews (< 200 required)', 'coverage 0.0% of blueprint (< 50% required)']
+    PASS  A: abstains on no data: actual=True expected=True
+    PASS  A: coverage is 0: actual=0.0 expected=0.0
+    [B 1/5 topics] abstained=TRUE   coverage= 20.0%  reasons=['coverage 20.0% of blueprint (< 50% required)']
+    PASS  B: abstains on low coverage: actual=True expected=True
+    PASS  B: coverage ~20%: actual=20 expected=20
+    PASS  B: reason cites coverage (not reviews) reasons=['coverage 20.0% of blueprint (< 50% required)']
+    [C 3/5 topics] abstained=FALSE  score=100 range=[96,100] coverage= 60.0%  reasons=['260 graded reviews', 'coverage 60.0% of blueprint', 'weighted recall 100.0%', '3 covered topics']
+    PASS  C: now SCORES (not abstain): actual=False expected=False
+    PASS  C: coverage 60%: actual=60 expected=60
+    PASS  C: non-degenerate range low<high [95.7,100.0]
+    PASS  C: point within range point=100.0
+    PASS  score CHANGED with coverage (B abstain -> C scored) (proves it's computed, not static)
+
+======================================================================
+RESULT: ALL CHECKS PASSED — every feature computed from its inputs.
+======================================================================

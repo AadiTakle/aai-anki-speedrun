@@ -22,6 +22,14 @@ struct SpeedrunApp: App {
     var body: some Scene {
         WindowGroup {
             ReviewView(session: session)
+                .onAppear {
+                    // Hands-off Simulator recording: launch with `--autodemo`
+                    // to auto-drive a full review session on the shared engine.
+                    // Interactive taps still work without this flag.
+                    if ProcessInfo.processInfo.arguments.contains("--autodemo") {
+                        session.startAutoDemo()
+                    }
+                }
         }
     }
 

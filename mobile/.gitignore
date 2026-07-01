@@ -7,3 +7,8 @@ ios/build/
 ios/.swiftpm/
 *.xcframework
 DerivedData/
+
+# Xcode per-user state (the project itself is generated from project.yml and IS
+# committed, but user-specific state must not be)
+xcuserdata/
+*.xcuserstate

@@ -48,9 +48,22 @@ at FAN OUT. `test_charter` points to the relevant section of `docs/wednesday_pla
 
 ## Completed / approved features
 
+Merged to `main` @ `78b6003` on 2026-07-01 by fast-forwarding `integration/wed-f1-f5`
+(the superset of the whole stack + all fixes). Stack PRs #6 (merged) and #7–#12 (closed as
+superseded — their commits are on `main`).
+
 | id | title | lane | pr | approved_commit | notes |
 |----|-------|------|----|-----------------|-------|
-| –  | –     | –    | –  | –               | –     |
+| FREEZE | Wednesday contract: SpeedrunService | – | #6 | on `main` | proto + service + enum |
+| F1 | Topic taxonomy + crosswalk store (col.conf, undo-safe) | A/B | #7 | on `main` | + range clamping (review fix) |
+| F4 | Per-topic memory mastery query | A | #8 | on `main` | + suspended/buried exclusion + `recall_card_count` (honesty fix) |
+| F5 | Points-at-stake review queue (Rust engine change) | A | #9 | on `main` | recency-decayed weighted interleaving |
+| F6 | Memory score (range + give-up rule) | A | #10 | on `main` | abstains on <200 reviews / <50% coverage / no recall data |
+| F6c | Memory-score dashboard (range + abstain UI) | C | #11 | on `main` | + served page + deck-options dropdown (GUI wiring) |
+| F10 | Exam-deck review loop (proof) | B/G | #12 | on `main` | end-to-end pytest + demo |
+| F11 | Desktop installer (macOS + Linux, clean-machine verified) | B/F | – | on `main` (+W1 on integration) | macOS `.app`/`.dmg`; **Linux `.tar.zst` built in-container + verified on a clean container (xvfb, AI off) — W1** (`proof/wednesday/linux/`). |
+| F12 | Mobile: iOS app on shared engine (FFI) | E | – | on `main` (+W2 on integration) | **Runnable iOS Simulator app done (W2):** XcodeGen project, `.app` builds, recorded review session on `rslib` (`mobile/ios/proof/review_session.mp4`). Device signing/provisioning still out of scope. |
+| F13 | Benchmark harness (`just bench`, challenge 7h) | G | – | on `main` | recordings pending |
 
 ## Test-integrity & rollback reports
 

@@ -1,0 +1,2 @@
+=== commit ===
+78b6003 Add feature interactivity proof (real backend, self-checking)

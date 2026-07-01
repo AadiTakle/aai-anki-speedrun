@@ -1,0 +1,21 @@
+Starting Anki 26.05...
+Qt warning: Detected locale "C" with character encoding "ANSI_X3.4-1968", which is not UTF-8.
+Qt depends on a UTF-8 locale, and has switched to "C.UTF-8" instead.
+If this causes problems, reconfigure your locale. See the locale(1) manual
+for more information. 
+2026-07-01 17:55:45,443:INFO:aqt.mediasrv: Serving on http://127.0.0.1:35011
+Qt info: Sandboxing disabled by user. 
+Qt warning: Failed to create Vulkan instance: -9 
+Qt warning: Failed to create platform Vulkan instance 
+Detected locale "C" with character encoding "ANSI_X3.4-1968", which is not UTF-8.
+Qt depends on a UTF-8 locale, and has switched to "C.UTF-8" instead.
+If this causes problems, reconfigure your locale. See the locale(1) manual
+for more information.
+[72:113:0701/175545.522742:ERROR:../../../qtwebengine/src/3rdparty/chromium/dbus/bus.cc:408] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory
+Detected locale "C" with character encoding "ANSI_X3.4-1968", which is not UTF-8.
+Qt depends on a UTF-8 locale, and has switched to "C.UTF-8" instead.
+If this causes problems, reconfigure your locale. See the locale(1) manual
+for more information.
+Starting main loop...
+mpv not found, reverting to mplayer
+2026-07-01 17:56:12,747:WARNING:waitress: unhandled close event
