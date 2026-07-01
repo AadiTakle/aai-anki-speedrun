@@ -31,11 +31,23 @@ A = Rust engine · B = Python/Qt desktop · C = Web UI (Svelte) · D = AI/eval �
 
 ## Active features
 
-Wednesday slice planned (see `docs/wednesday_plan.md`). Contract not yet FROZEN; branches/PRs created
-at FAN OUT. `test_charter` points to the relevant section of `docs/wednesday_plan.md` §5.
+**Wednesday slice is on `main`** — those rows moved to the Completed table below. Now building the
+**next slice** (build-readiness plan: `docs/wednesday_remaining_plan.md` + the STAT build-readiness
+canvas) on `integration/next-slice`. Contract FROZEN in two waves; engine workers fan out per wave.
+The next-slice rows are at the top of the table; the F1–F13 rows beneath them are the (superseded)
+Wednesday slice kept for history.
 
 | id | title | lane | branch | pr | depends_on | state | base_commit | test_charter | review_notes |
 |----|-------|------|--------|----|------------|-------|-------------|--------------|--------------|
+| FRZ1 | Next-slice contract wave 1 (ingest / perf / readiness / points-at-stake) | – | `integration/next-slice` | – | – | frozen | `8268e8f` | – | supervisor freeze off `main` |
+| F2  | QBank / practice-test ingestion (col.conf, undo-safe, dedup) | A | `feat/f2-qbank-ingest` | – | FRZ1 | done (integration) | `456c68d` | canvas step 1 | attempts store + accessors; merged to integration |
+| PERF | Performance score (Beta-Binomial + Wilson 90% CI, abstain) | A | `feat/performance-score` | – | F2 | done (integration) | `f97d9b1` | canvas step 3 | per-topic accuracy + weighted score + abstain <50 attempts |
+| DISP | Points-at-stake display RPC ("Today's focus" ranking) | A | `feat/points-at-stake-display` | – | F1 | done (integration) | `ab1b892` | canvas step 7 | read-only ranked view over F1 store |
+| FRZ2 | Next-slice contract wave 2 (relink/error-log, next-action, coverage) | – | `integration/next-slice` | – | – | frozen | `8d34497` | – | supervisor freeze; 3 RPCs + msgs + stubs |
+| F3  | Relink misses → real weakness + auto-unsuspend + error log | A | (worker worktree) | – | F2 | in-dev | `8d34497` | canvas step 2 | dispatched (TDD). Replaces seeded weakness with QBank-derived. |
+| NEXT | GetNextAction (Today console hero recommendation) | A | (worker worktree) | – | DISP | in-dev | `8d34497` | canvas step 7 | dispatched (TDD). Abstains when signal thin. |
+| COV | GetCoverageMap (F7 per-section blueprint coverage) | A | (worker worktree) | – | F1 | in-dev | `8d34497` | canvas step 4 | dispatched (TDD). Blueprint-weighted covered %. |
+| CONSOLE | Lane-C "Today" console UI (hero + gauges + errors/reviewer) | C | (concurrent agent, main checkout) | – | DISP/NEXT/COV | in-dev | – | canvas step 8 | separate agent building `anki/ts/lib/speedrun/*` + routes; consumes these RPCs |
 | F1  | Topic taxonomy + card→topic crosswalk (config-backed) | A/B | `cursor/feat-f1-topic-store-1838` | #7 | – | ready-for-review | `ee35e7e` | `wednesday_plan.md` §5 (F1/F4) | 4 Rust tests green (store) |
 | F4  | Per-topic memory mastery query | A | `cursor/feat-f4-mastery-query-1838` | #8 | F1 | ready-for-review | `09c27c1` | `wednesday_plan.md` §5 (F4) | 5 Rust tests green (mastery) |
 | F5  | Points-at-stake / topic-aware review queue (Rust change) | A | `cursor/feat-f5-points-at-stake-1838` (+ `feat/f5-weighted-interleave`) | #9 | F1 | ready-for-review | `8717fb6` | `wednesday_plan.md` §5 (F5) | 3 Rust + 1 Py test green. **Redesigned to recency-decayed weighted interleaving** (`fea31a3`, merged to integration): dominant topic leads/recurs, similar topics interleave (no blocking). +1 interleave test; F10 review-loop test updated to assert interleaving. |
