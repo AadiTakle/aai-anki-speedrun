@@ -423,6 +423,13 @@ def is_sveltekit_page(path: str) -> bool:
         "import-page",
         "image-occlusion",
         "memory-score",
+        # STAT (Speedrun) console screens — the five daily-loop destinations.
+        # Centralized here so screen lanes only add their own +page.svelte.
+        "today",
+        "reviewer",
+        "import",
+        "errors",
+        "trajectory",
     ]
 
 
