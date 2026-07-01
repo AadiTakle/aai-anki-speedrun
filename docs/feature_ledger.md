@@ -40,7 +40,8 @@ at FAN OUT. `test_charter` points to the relevant section of `docs/wednesday_pla
 | F4  | Per-topic memory mastery query | A | `cursor/feat-f4-mastery-query-1838` | #8 | F1 | ready-for-review | `09c27c1` | `wednesday_plan.md` §5 (F4) | 5 Rust tests green (mastery) |
 | F5  | Points-at-stake / topic-aware review queue (Rust change) | A | `cursor/feat-f5-points-at-stake-1838` | #9 | F1 | ready-for-review | `8717fb6` | `wednesday_plan.md` §5 (F5) | 3 Rust + 1 Py test green |
 | F6  | Memory score with range + give-up rule | A(/C later) | `feat/f6-memory-score` | #10 | F4 | ready-for-review | `ce946bf` | `wednesday_plan.md` §5 (F6) | Engine done: 5 Rust + 1 Py test green; PR #10 stacked on F4. Also verified integrated (`integration/wed-f1-f5` `ec9e7d8`): full `just check` green (537 Rust / 123 py). Lane-C dashboard deferred (Fri). |
-| F10 | Exam-deck review loop (import + run) | B/G | `feat/F10-review-loop` | – | F5 | planned | – | `wednesday_plan.md` §1 | – |
+| F6c | Memory-score dashboard (range + abstain UI) | C | `feat/f6c-memory-dashboard` | – | F6 | in-dev | `ce946bf` (on F6) | `wednesday_plan.md` §5 (F6, Lane C) | Lane-C worker dispatched (vitest + Svelte; e2e stretch) |
+| F10 | Exam-deck review loop (import + run) | B/G | `feat/f10-review-loop` | – | F5 | in-dev | `8717fb6` (on F5) | `wednesday_plan.md` §1 | Lane-B/G worker dispatched (pytest review loop + demo script) |
 | F11 | Linux installer (clean-machine) | B/F | `feat/F11-linux-installer` | – | core-green | planned | – | `wednesday_plan.md` §5 (F11) | – |
 | F12 | Mobile: AnkiDroid fork builds + review session | E | `feat/F12-mobile-ankidroid` | – | contract | planned | – | `wednesday_plan.md` §5 (F12) | – |
 | F13 | Proof harness: recordings + `just bench` skeleton | G | `feat/F13-proof-harness` | – | all | planned | – | `wednesday_plan.md` §1 | – |
