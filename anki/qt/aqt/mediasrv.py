@@ -766,6 +766,9 @@ exposed_backend_list = [
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",
+    # SpeedrunService (read-only; needed by the memory-score page + dashboard)
+    "get_memory_score",
+    "get_topic_mastery",
 ]
 
 
