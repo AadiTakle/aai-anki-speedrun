@@ -10,6 +10,7 @@
 
 #[cfg(feature = "bench")]
 pub mod bench;
+pub mod focus;
 pub mod mastery;
 pub mod score;
 mod service;

@@ -87,7 +87,7 @@ impl crate::services::SpeedrunService for Collection {
     fn get_points_at_stake(
         &mut self,
     ) -> error::Result<anki_proto::speedrun::PointsAtStakeResponse> {
-        // Stub: empty until the display RPC worker computes ranked topics.
-        Ok(anki_proto::speedrun::PointsAtStakeResponse::default())
+        // Read-only ranked "Today's focus" view over the F1 topic store.
+        self.points_at_stake()
     }
 }
