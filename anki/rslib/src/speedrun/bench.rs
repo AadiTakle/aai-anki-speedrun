@@ -5,16 +5,17 @@
 //! 7h skeleton).
 //!
 //! Compiled only under the `bench` feature (mirroring
-//! [`crate::card_rendering::anki_directive_benchmark`]), so it never touches the
-//! normal library build or its public API. It provides:
+//! [`crate::card_rendering::anki_directive_benchmark`]), so it never touches
+//! the normal library build or its public API. It provides:
 //!
 //! - [`build_synthetic_collection`]: a synthetic large-deck generator that
 //!   builds an in-memory [`Collection`] with `card_count` due review cards
 //!   spread round-robin across [`SYNTHETIC_TOPIC_COUNT`] topics, seeds the
 //!   blueprint weights + per-topic weakness + the card->topic crosswalk, and
 //!   selects the points-at-stake review order on the study deck. Enough revlog
-//!   rows and full blueprint coverage are seeded so [`Collection::memory_score`]
-//!   exercises its real scoring path rather than the early abstain return.
+//!   rows and full blueprint coverage are seeded so
+//!   [`Collection::memory_score`] exercises its real scoring path rather than
+//!   the early abstain return.
 //! - Thin `run_*` wrappers exposing the three `pub(crate)` engine entry points
 //!   ([`Collection::build_queues`] under `PointsAtStake`,
 //!   [`Collection::topic_mastery`], [`Collection::memory_score`]) to the

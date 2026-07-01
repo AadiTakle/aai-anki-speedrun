@@ -48,10 +48,9 @@ pub fn speedrun_benchmark(c: &mut Criterion) {
         format!("topic_mastery/{SYNTHETIC_CARD_COUNT}_cards_{SYNTHETIC_TOPIC_COUNT}_topics"),
         |b| b.iter(|| run_topic_mastery(&mut col)),
     );
-    group.bench_function(
-        format!("memory_score/{SYNTHETIC_CARD_COUNT}_cards"),
-        |b| b.iter(|| run_memory_score(&mut col)),
-    );
+    group.bench_function(format!("memory_score/{SYNTHETIC_CARD_COUNT}_cards"), |b| {
+        b.iter(|| run_memory_score(&mut col))
+    });
 
     group.finish();
 }
