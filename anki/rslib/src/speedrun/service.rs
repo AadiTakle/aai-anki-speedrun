@@ -116,4 +116,13 @@ impl crate::services::SpeedrunService for Collection {
         // Read-only per-section blueprint coverage view over the F1 topic store.
         self.coverage_map()
     }
+
+    // --- Wave 3 (real data): frozen stub. Lane A replaces with the aggregate
+    // store + source-replace + performance/weakness integration (speedrun::qbank).
+    fn import_qbank_aggregate(
+        &mut self,
+        _input: anki_proto::speedrun::ImportQbankAggregateRequest,
+    ) -> error::Result<anki_proto::speedrun::ImportQbankAggregateResponse> {
+        Ok(anki_proto::speedrun::ImportQbankAggregateResponse::default())
+    }
 }

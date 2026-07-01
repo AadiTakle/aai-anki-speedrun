@@ -49,6 +49,13 @@ service SpeedrunService {
   rpc GetNextAction(generic.Empty) returns (NextAction);
   // Per-section blueprint coverage map (which topics have study material). (F7)
   rpc GetCoverageMap(generic.Empty) returns (CoverageMapResponse);
+  // --- Wave 3 (real data): flexible QBank ingestion ---
+  // Import aggregate QBank performance per topic (e.g. UWorld "Performance by
+  // System") — the counts a QBank exposes without a per-question export.
+  // Source-tagged; REPLACES all prior rows for that source (idempotent updates,
+  // no double-counting, no fabricated per-question records). (PRD F2)
+  rpc ImportQbankAggregate(ImportQbankAggregateRequest)
+      returns (ImportQbankAggregateResponse);
 }
 
 // Implicitly includes any of the above methods not listed here (delegated to
@@ -249,4 +256,25 @@ message CoverageMapResponse {
   repeated CoverageSection sections = 1;
   // Blueprint-weighted fraction of the exam that has study material (0..1).
   double covered_pct = 2;
+}
+
+// One topic's aggregate QBank result (correct out of total answered) — the
+// granularity a QBank exposes (per subject/system), not per-question. (PRD F2)
+message QbankTopicResult {
+  string topic_id = 1;
+  uint32 correct = 2;
+  uint32 total = 3;
+}
+
+message ImportQbankAggregateRequest {
+  // Provenance label, e.g. "UWorld", "Amboss", "NBME", or a custom name.
+  string source = 1;
+  // Replaces ALL prior aggregate rows for this source (idempotent updates).
+  repeated QbankTopicResult rows = 2;
+}
+
+message ImportQbankAggregateResponse {
+  collection.OpChanges changes = 1;
+  uint32 topics_imported = 2;
+  uint32 total_questions = 3;
 }
