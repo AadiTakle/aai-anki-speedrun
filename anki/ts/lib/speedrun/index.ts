@@ -20,6 +20,11 @@ export * from "./display";
 // The five destinations that make up the daily loop.
 export * from "./nav";
 
+// Flexible QBank report parser + canonical blueprint-topic mapping (real F2
+// aggregate ingestion — pure, framework-free, unit-tested).
+export * from "./qbankParse";
+export * from "./topicMap";
+
 // Typed data-access adapter (mock-backed, single swap seam per function).
 export {
     getCoverageMap,

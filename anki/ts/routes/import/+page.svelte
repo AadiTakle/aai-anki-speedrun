@@ -4,82 +4,209 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 STAT · Import → Auto-link (screen lane C3, destination "import").
 
-Ingest a QBank / practice-test block (paste / CSV / JSON), preview the parse +
-idempotent dedup, then fire the flagship ORGANIZING ACTION: one calm pulse that
-settles into a quiet result — misses become unsuspended AnKing cards + opened
-error-log reframes — pointing at the single next move. Built entirely on the
-shared foundation ($lib/speedrun); no engine calls, illustrative data only.
+Ingest a QBank's aggregate "performance by subject/system" block (paste any
+QBank — UWorld etc. — or add custom rows), map each subject to a canonical
+blueprint topic (auto-mapped, user-correctable), then fire the flagship
+ORGANIZING ACTION: ImportQbankAggregate + RelinkMisses over the shared engine
+($lib/speedrun), one calm pulse that settles into the real returned summary.
+
+Honesty bar: every outcome number comes from the RPC response. On a backend
+error we surface it inline — we NEVER fall back to fabricated results, and rows
+the user left unmapped are excluded from the import and clearly reported.
 -->
 <script lang="ts">
-    import { onDestroy } from "svelte";
+    import { importQbankAggregate, relinkMisses } from "@generated/backend";
+    import { onDestroy, onMount } from "svelte";
 
-    import { AppShell, Chip, StatusDot, STAT_SIGNAL, acuityLabel } from "$lib/speedrun";
+    import {
+        acuityFromWeakness,
+        acuityLabel,
+        AppShell,
+        BLUEPRINT_TOPICS,
+        Chip,
+        mapLabelToTopic,
+        parseQbankReport,
+        STAT_SIGNAL,
+        StatusDot,
+        topicDisplayName,
+    } from "$lib/speedrun";
 
-    import { IMPORT_SCENARIO, type ImportFormat } from "./import-mock";
+    import { DEFAULT_SOURCE, SAMPLE_PASTE } from "./import-mock";
 
     type Phase = "idle" | "linking" | "settled";
 
-    const scenario = IMPORT_SCENARIO;
-    const { preview, autoLink } = scenario;
+    /** One editable preview row: a QBank subject mapped to a blueprint topic. */
+    interface PreviewRow {
+        label: string;
+        /** Canonical topic id, or "" when unassigned (must be resolved to import). */
+        topicId: string;
+        correct: number;
+        total: number;
+        /** True when the topic was auto-mapped from the label. */
+        auto: boolean;
+        /** True for a user-added manual row (label + counts are editable). */
+        custom: boolean;
+    }
 
-    // How long the single calm pulse plays before settling (kept in sync with
-    // the CSS animation below). Skipped entirely under reduced-motion.
+    interface ImportedTopic {
+        topicId: string;
+        name: string;
+        correct: number;
+        total: number;
+        pct: number;
+        acuity: "critical" | "watch" | "stable" | "muted";
+    }
+
+    interface ImportSummary {
+        topicsImported: number;
+        totalQuestions: number;
+        excluded: number;
+        topics: ImportedTopic[];
+    }
+
+    // How long the single calm pulse plays before settling (kept in sync with the
+    // CSS animation below). Skipped entirely under reduced-motion.
     const PULSE_MS = 900;
 
-    const FORMATS: { id: ImportFormat; label: string }[] = [
-        { id: "paste", label: "Paste" },
-        { id: "csv", label: "CSV" },
-        { id: "json", label: "JSON" },
-    ];
+    let source = DEFAULT_SOURCE;
+    let text = SAMPLE_PASTE;
+    let previewRows: PreviewRow[] = [];
+    let parseWarnings: string[] = [];
+    let parsed = false;
 
-    // Row status helpers (flattened from nested ternaries; see no-nested-ternary).
-    function rowAcuity(row: {
-        duplicate?: boolean;
-        correct?: boolean;
-    }): "muted" | "stable" | "critical" {
-        if (row.duplicate) {
-            return "muted";
-        }
-        return row.correct ? "stable" : "critical";
-    }
-    function rowStatus(row: { duplicate?: boolean; correct?: boolean }): string {
-        if (row.duplicate) {
-            return "deduped";
-        }
-        return row.correct ? "correct" : "MISS";
-    }
-
-    let format: ImportFormat = "paste";
-    let text = scenario.samples.paste;
-    // "pristine" = still showing a sample, so switching tabs may swap it; once
-    // the user edits, we never clobber their input on a tab switch.
-    let pristine = true;
     let phase: Phase = "idle";
+    let importError: string | null = null;
+    let summary: ImportSummary | null = null;
     let pulseTimer: ReturnType<typeof setTimeout> | undefined;
 
     $: hasContent = text.trim().length > 0;
+    $: mappedRows = previewRows.filter((row) => row.topicId !== "");
+    $: unmappedRows = previewRows.filter((row) => row.topicId === "");
+    $: resolvedRows = mappedRows.filter(
+        (row) => row.total > 0 && row.correct >= 0 && row.correct <= row.total,
+    );
+    $: canImport = resolvedRows.length > 0 && phase !== "linking";
 
-    function selectFormat(next: ImportFormat): void {
-        format = next;
-        if (pristine) {
-            text = scenario.samples[next];
+    function rowReady(row: PreviewRow): boolean {
+        return (
+            row.topicId !== "" &&
+            row.total > 0 &&
+            row.correct >= 0 &&
+            row.correct <= row.total
+        );
+    }
+
+    // Row status dot (flattened; see no-nested-ternary).
+    function rowAcuity(row: PreviewRow): "critical" | "watch" | "stable" {
+        if (row.topicId === "") {
+            return "critical";
         }
+        if (!rowReady(row)) {
+            return "watch";
+        }
+        return "stable";
+    }
+
+    function parseBlock(): void {
+        const result = parseQbankReport(text);
+        previewRows = result.rows.map((row) => {
+            const topic = mapLabelToTopic(row.label);
+            return {
+                label: row.label,
+                topicId: topic ?? "",
+                correct: row.correct,
+                total: row.total,
+                auto: topic !== null,
+                custom: false,
+            };
+        });
+        parseWarnings = result.warnings;
+        parsed = true;
+        resetResult();
     }
 
     function onInput(): void {
-        pristine = false;
+        // Editing the block invalidates a stale parse until re-parsed.
+        importError = null;
     }
 
     function loadSample(): void {
-        text = scenario.samples[format];
-        pristine = true;
-        resetResult();
+        source = DEFAULT_SOURCE;
+        text = SAMPLE_PASTE;
+        parseBlock();
     }
 
     function clearInput(): void {
         text = "";
-        pristine = false;
+        previewRows = [];
+        parseWarnings = [];
+        parsed = false;
         resetResult();
+    }
+
+    function addCustomRow(): void {
+        previewRows = [
+            ...previewRows,
+            { label: "", topicId: "", correct: 0, total: 0, auto: false, custom: true },
+        ];
+        parsed = true;
+        resetResult();
+    }
+
+    function removeRow(index: number): void {
+        previewRows = previewRows.filter((_, i) => i !== index);
+        resetResult();
+    }
+
+    // Re-trigger derived reactivity after an in-place edit to a bound row field.
+    function touch(): void {
+        previewRows = [...previewRows];
+        importError = null;
+    }
+
+    /** Collapse resolved rows to one QbankTopicResult per topic (sum duplicates). */
+    function aggregateByTopic(
+        rows: PreviewRow[],
+    ): { topicId: string; correct: number; total: number }[] {
+        const byTopic = new Map<
+            string,
+            { topicId: string; correct: number; total: number }
+        >();
+        for (const row of rows) {
+            const existing = byTopic.get(row.topicId);
+            if (existing) {
+                existing.correct += row.correct;
+                existing.total += row.total;
+            } else {
+                byTopic.set(row.topicId, {
+                    topicId: row.topicId,
+                    correct: row.correct,
+                    total: row.total,
+                });
+            }
+        }
+        return [...byTopic.values()];
+    }
+
+    function toImportedTopics(
+        rows: { topicId: string; correct: number; total: number }[],
+    ): ImportedTopic[] {
+        return (
+            rows
+                .map((row) => {
+                    const accuracy = row.total > 0 ? row.correct / row.total : 0;
+                    return {
+                        topicId: row.topicId,
+                        name: topicDisplayName(row.topicId),
+                        correct: row.correct,
+                        total: row.total,
+                        pct: Math.round(accuracy * 100),
+                        acuity: acuityFromWeakness(1 - accuracy),
+                    };
+                })
+                // Weakest topics first — where the points-at-stake are highest.
+                .sort((a, b) => a.pct - b.pct)
+        );
     }
 
     function prefersReducedMotion(): boolean {
@@ -90,12 +217,7 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         );
     }
 
-    function runImport(): void {
-        if (!hasContent || phase === "linking") {
-            return;
-        }
-        clearTimer();
-        // Honor reduced-motion: settle immediately, no pulse.
+    function settle(): void {
         if (prefersReducedMotion()) {
             phase = "settled";
             return;
@@ -107,9 +229,45 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         }, PULSE_MS);
     }
 
+    async function runImport(): Promise<void> {
+        if (!canImport) {
+            return;
+        }
+        clearTimer();
+        importError = null;
+        phase = "linking";
+
+        const aggregate = aggregateByTopic(resolvedRows);
+        const excluded = unmappedRows.length;
+        try {
+            // The flagship organizing action, over the shared engine: replace this
+            // source's aggregate rows, then turn misses into the focused queue.
+            const response = await importQbankAggregate({
+                source: source.trim() || DEFAULT_SOURCE,
+                rows: aggregate,
+            });
+            await relinkMisses({});
+
+            summary = {
+                topicsImported: response.topicsImported,
+                totalQuestions: response.totalQuestions,
+                excluded,
+                topics: toImportedTopics(aggregate),
+            };
+            settle();
+        } catch (error) {
+            // Honesty bar: never fabricate a result — surface the failure.
+            importError = error instanceof Error ? error.message : String(error);
+            summary = null;
+            phase = "idle";
+        }
+    }
+
     function resetResult(): void {
         clearTimer();
         phase = "idle";
+        importError = null;
+        summary = null;
     }
 
     function clearTimer(): void {
@@ -119,6 +277,7 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         }
     }
 
+    onMount(parseBlock);
     onDestroy(clearTimer);
 </script>
 
@@ -129,38 +288,35 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         <header class="intro">
             <p class="eyebrow">Ingest · the organizing action</p>
             <h1 class="headline">
-                Import a Q-block — watch your misses organize themselves
+                Import your QBank subjects — watch your misses organize themselves
             </h1>
             <p class="lede">
-                Drop a QBank or practice-test block. STAT normalizes it into attempts,
-                dedups idempotently, then unsuspends exactly the cards your misses map
-                to and opens an error-log reframe for each — one calm pulse, then quiet.
+                Paste any QBank's per-subject scorecard (UWorld and most banks only
+                export aggregate counts, not questions). STAT maps each subject to a
+                blueprint topic, then unsuspends the cards behind your weakest topics —
+                one calm pulse, then quiet.
             </p>
         </header>
 
-        <!-- 1 · INPUT — one importer, three source adapters -->
+        <!-- 1 · INPUT — a source label + one flexible paste box -->
         <section class="panel" aria-labelledby="ingest-h">
             <div class="panel-head">
                 <h2 id="ingest-h" class="panel-title">Source block</h2>
-                <Chip>{scenario.source}</Chip>
+                <Chip>aggregate · by subject</Chip>
             </div>
 
-            <div class="segmented" role="group" aria-label="Import format">
-                {#each FORMATS as f (f.id)}
-                    <button
-                        type="button"
-                        class="seg"
-                        class:active={format === f.id}
-                        aria-pressed={format === f.id}
-                        on:click={() => selectFormat(f.id)}
-                    >
-                        {f.label}
-                    </button>
-                {/each}
-            </div>
+            <label class="field-label" for="source-input">QBank source</label>
+            <input
+                id="source-input"
+                class="text-input"
+                type="text"
+                spellcheck="false"
+                placeholder="UWorld"
+                bind:value={source}
+            />
 
-            <label class="field-label" for="block-input">
-                Paste your {format.toUpperCase()} export
+            <label class="field-label spaced" for="block-input">
+                Paste “performance by subject / system”
             </label>
             <textarea
                 id="block-input"
@@ -179,7 +335,7 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
                     type="button"
                     class="btn ghost"
                     on:click={clearInput}
-                    disabled={!hasContent}
+                    disabled={!hasContent && previewRows.length === 0}
                 >
                     Clear
                 </button>
@@ -187,75 +343,186 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
                 <button
                     type="button"
                     class="btn primary"
-                    on:click={runImport}
+                    on:click={parseBlock}
                     disabled={!hasContent}
                 >
-                    Import &amp; auto-link
+                    Parse block
                 </button>
             </div>
         </section>
 
-        <!-- 2 · PARSE + IDEMPOTENT DEDUP preview -->
-        {#if hasContent}
+        <!-- 2 · PREVIEW + MAP — auto-mapped topics, user-correctable -->
+        {#if parsed}
             <section class="panel" aria-labelledby="parse-h">
                 <div class="panel-head">
-                    <h2 id="parse-h" class="panel-title">Parsed preview</h2>
-                    <Chip dot="stable">dedup (source, id, ts)</Chip>
+                    <h2 id="parse-h" class="panel-title">Preview &amp; map</h2>
+                    <Chip dot={unmappedRows.length > 0 ? "critical" : "stable"}>
+                        {resolvedRows.length} ready · {unmappedRows.length} to assign
+                    </Chip>
                 </div>
 
                 <p class="parse-summary">
-                    <span class="stat-num">{preview.parsed}</span>
-                    parsed
+                    <span class="stat-num">{previewRows.length}</span>
+                    rows
                     <span class="sep">·</span>
-                    <span class="stat-num">{preview.fresh}</span>
-                    new
+                    <span class="stat-num">{mappedRows.length}</span>
+                    mapped
                     <span class="sep">·</span>
-                    <span class="stat-num dup">{preview.duplicates}</span>
-                    duplicates skipped
+                    <span class="stat-num crit">{unmappedRows.length}</span>
+                    unassigned
                 </p>
 
-                <ul class="rows" aria-label="Parsed rows (excerpt)">
-                    {#each preview.rows as row, i (i)}
-                        <li class="prow" class:dup={row.duplicate}>
-                            <StatusDot acuity={rowAcuity(row)} size={8} />
-                            <span class="mono id">{row.externalId}</span>
-                            <span class="topic">{row.topic}</span>
-                            <span class="mono secs">{row.seconds}s</span>
-                            <span
-                                class="status"
-                                class:ok={row.correct && !row.duplicate}
-                                class:miss={!row.correct && !row.duplicate}
-                                class:skip={row.duplicate}
-                            >
-                                {rowStatus(row)}
-                            </span>
-                        </li>
-                    {/each}
-                </ul>
+                {#if previewRows.length > 0}
+                    <ul class="rows" aria-label="Parsed subjects">
+                        {#each previewRows as row, i (i)}
+                            <li class="prow" class:unmapped={row.topicId === ""}>
+                                <StatusDot acuity={rowAcuity(row)} size={8} />
 
-                <p class="dedup-note">
-                    Showing {preview.rows.length} of {preview.parsed} rows · illustrative.
-                    {scenario.dedupNote}
-                </p>
+                                {#if row.custom}
+                                    <input
+                                        class="cell-input label-input"
+                                        type="text"
+                                        placeholder="Custom subject"
+                                        aria-label="Custom subject label"
+                                        bind:value={row.label}
+                                    />
+                                {:else}
+                                    <span class="label" title={row.label}>
+                                        {row.label}
+                                    </span>
+                                {/if}
+
+                                <select
+                                    class="select"
+                                    class:assign={row.topicId === ""}
+                                    aria-label="Blueprint topic for {row.label ||
+                                        'custom row'}"
+                                    bind:value={row.topicId}
+                                    on:change={touch}
+                                >
+                                    <option value="">— assign topic —</option>
+                                    {#each BLUEPRINT_TOPICS as topic (topic.id)}
+                                        <option value={topic.id}>{topic.name}</option>
+                                    {/each}
+                                </select>
+
+                                {#if row.custom}
+                                    <span class="counts editable">
+                                        <input
+                                            class="cell-input num"
+                                            type="number"
+                                            min="0"
+                                            aria-label="Correct"
+                                            bind:value={row.correct}
+                                            on:input={touch}
+                                        />
+                                        <span class="of">/</span>
+                                        <input
+                                            class="cell-input num"
+                                            type="number"
+                                            min="0"
+                                            aria-label="Total"
+                                            bind:value={row.total}
+                                            on:input={touch}
+                                        />
+                                    </span>
+                                {:else}
+                                    <span class="counts">
+                                        <span class="stat-num">{row.correct}</span>
+                                        /
+                                        <span class="stat-num">{row.total}</span>
+                                    </span>
+                                {/if}
+
+                                <button
+                                    type="button"
+                                    class="row-remove"
+                                    aria-label="Remove row"
+                                    title="Remove row"
+                                    on:click={() => removeRow(i)}
+                                >
+                                    ×
+                                </button>
+                            </li>
+                        {/each}
+                    </ul>
+                {:else}
+                    <p class="dedup-note">
+                        No subject rows parsed. Add a custom row, or paste a
+                        “performance by subject” block above.
+                    </p>
+                {/if}
+
+                <div class="input-actions">
+                    <button type="button" class="btn ghost" on:click={addCustomRow}>
+                        + Add custom row
+                    </button>
+                    <span class="spacer"></span>
+                    <button
+                        type="button"
+                        class="btn primary"
+                        on:click={runImport}
+                        disabled={!canImport}
+                    >
+                        Import &amp; auto-link
+                    </button>
+                </div>
+
+                {#if unmappedRows.length > 0}
+                    <p class="dedup-note assign-note">
+                        <span class="stat-num crit">{unmappedRows.length}</span>
+                        unassigned row{unmappedRows.length === 1 ? "" : "s"} will be excluded
+                        from the import — assign a topic to include them.
+                    </p>
+                {/if}
+
+                {#if parseWarnings.length > 0}
+                    <details class="warnings">
+                        <summary>
+                            {parseWarnings.length} line{parseWarnings.length === 1
+                                ? ""
+                                : "s"} skipped while parsing
+                        </summary>
+                        <ul>
+                            {#each parseWarnings as warning (warning)}
+                                <li>{warning}</li>
+                            {/each}
+                        </ul>
+                    </details>
+                {/if}
             </section>
         {/if}
 
-        <!-- 3 · THE AUTO-LINK MOMENT — one calm pulse, then quiet -->
+        <!-- 3 · THE AUTO-LINK MOMENT — one calm pulse, then the real summary -->
         <section
             class="result"
-            class:idle={phase === "idle"}
+            class:idle={phase === "idle" && importError === null}
             class:pulsing={phase === "linking"}
             class:settled={phase === "settled"}
+            class:errored={importError !== null}
             aria-live="polite"
         >
-            {#if phase === "idle"}
+            {#if importError !== null}
+                <div class="result-head">
+                    <p class="eyebrow crit">Import failed</p>
+                    <button type="button" class="linklike" on:click={resetResult}>
+                        Dismiss
+                    </button>
+                </div>
+                <p class="error-copy">
+                    The engine rejected the import, so nothing was changed. No result is
+                    shown — we don't fabricate one.
+                </p>
+                <p class="error-detail">{importError}</p>
+            {:else if phase === "idle"}
                 <div class="result-idle">
                     <StatusDot acuity="muted" size={9} />
                     <p class="idle-copy">
-                        Import a block to organize your misses into a review queue.
+                        Map your subjects, then auto-link to unsuspend the cards behind
+                        your weakest topics.
                     </p>
                 </div>
-            {:else}
+            {:else if summary !== null}
                 <span class="pulse-ring" aria-hidden="true"></span>
 
                 <div class="result-head">
@@ -264,43 +531,47 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
                     </p>
                     {#if phase === "settled"}
                         <button type="button" class="linklike" on:click={resetResult}>
-                            Undo import
+                            Dismiss
                         </button>
                     {/if}
                 </div>
 
                 <p class="result-headline">
-                    <span class="stat-num big">{autoLink.misses}</span>
-                    misses →
-                    <span class="stat-num big">{autoLink.cardsUnsuspended}</span>
-                    AnKing cards unsuspended
+                    <span class="stat-num big">{summary.topicsImported}</span>
+                    topics imported
                     <span class="sep">·</span>
-                    <span class="stat-num big">{autoLink.reframesOpened}</span>
-                    error-log reframes opened
+                    <span class="stat-num big">{summary.totalQuestions}</span>
+                    questions logged from {source.trim() || DEFAULT_SOURCE}
                 </p>
 
                 <div class="topic-chips">
-                    {#each autoLink.topics as t (t.topicId)}
+                    {#each summary.topics as topic (topic.topicId)}
                         <span
                             class="topic-chip"
                             style="color: {STAT_SIGNAL[
-                                t.acuity
-                            ]}; border-color: {STAT_SIGNAL[t.acuity]}"
-                            title="{acuityLabel(t.acuity)} · {t.cards} cards mapped"
+                                topic.acuity
+                            ]}; border-color: {STAT_SIGNAL[topic.acuity]}"
+                            title="{acuityLabel(topic.acuity)} · {topic.pct}% correct"
                         >
-                            {t.name} · {t.misses}
-                            {t.misses === 1 ? "miss" : "misses"} → {t.cards} cards
+                            {topic.name} · {topic.correct}/{topic.total} · {topic.pct}%
                         </span>
                     {/each}
                 </div>
                 <p class="chips-caption">
-                    Where your {autoLink.misses} misses landed · one reframe each.
+                    Where your performance landed · weakest topics first.
+                    {#if summary.excluded > 0}
+                        <span class="crit">
+                            {summary.excluded} unassigned row{summary.excluded === 1
+                                ? ""
+                                : "s"} excluded.
+                        </span>
+                    {/if}
                 </p>
 
                 {#if phase === "settled"}
                     <p class="settled-copy">
-                        Nothing else demands attention. Your next move is one review
-                        session — the queue is already built.
+                        Your next move is one review session — the queue is already
+                        built from your weakest topics.
                     </p>
                     <div class="result-actions">
                         <a class="btn primary" href="/reviewer">
@@ -331,6 +602,9 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
 
         &.accent {
             color: stat.$primary;
+        }
+        &.crit {
+            color: stat.$critical;
         }
     }
 
@@ -380,38 +654,31 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         margin-inline-end: auto;
     }
 
-    // --- segmented control -------------------------------------------------
-    .segmented {
-        display: inline-flex;
-        gap: 6px;
-        margin-bottom: 12px;
-    }
-
-    .seg {
-        font-family: stat.$font-mono;
-        font-size: 0.72rem;
-        letter-spacing: 0.04em;
-        padding: 5px 14px;
-        border: 1px solid stat.$line;
-        border-radius: stat.$radius-sm;
-        background: stat.$surface;
-        color: stat.$ink-soft;
-        cursor: pointer;
-
-        &:hover {
-            color: stat.$ink;
-        }
-        &.active {
-            border-color: stat.$primary;
-            background: stat.$primary-wash;
-            color: stat.$primary;
-        }
-    }
-
     .field-label {
         @include stat.eyebrow;
         display: block;
         margin-bottom: 6px;
+
+        &.spaced {
+            margin-top: 14px;
+        }
+    }
+
+    .text-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 9px 12px;
+        border: 1px solid stat.$line;
+        border-radius: stat.$radius-sm;
+        background: stat.$paper;
+        color: stat.$ink;
+        font-family: stat.$font-mono;
+        font-size: 0.82rem;
+
+        &:focus-visible {
+            outline: 2px solid stat.$primary;
+            outline-offset: -1px;
+        }
     }
 
     .block-input {
@@ -520,8 +787,8 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         color: stat.$ink;
         font-weight: 600;
 
-        &.dup {
-            color: stat.$stable;
+        &.crit {
+            color: stat.$critical;
         }
         &.big {
             color: inherit;
@@ -531,6 +798,10 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
     .sep {
         opacity: 0.5;
         padding: 0 2px;
+    }
+
+    .crit {
+        color: stat.$critical;
     }
 
     .rows {
@@ -552,50 +823,98 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         &:first-child {
             border-top: none;
         }
-        &.dup {
-            opacity: 0.55;
-        }
-        &.dup .id,
-        &.dup .topic {
-            text-decoration: line-through;
+        &.unmapped {
+            background: stat.$critical-wash;
         }
     }
 
-    .mono {
-        @include stat.readout;
-        font-size: 0.75rem;
-    }
-
-    .prow .id {
-        color: stat.$ink-soft;
-        min-width: 68px;
-    }
-
-    .prow .topic {
+    .prow .label {
         color: stat.$ink;
         font-size: 0.82rem;
         flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
-    .prow .secs {
+    .cell-input {
+        border: 1px solid stat.$line;
+        border-radius: stat.$radius-sm;
+        background: stat.$paper;
+        color: stat.$ink;
+        font-family: stat.$font-mono;
+        font-size: 0.78rem;
+        padding: 4px 8px;
+
+        &:focus-visible {
+            outline: 2px solid stat.$primary;
+            outline-offset: -1px;
+        }
+    }
+
+    .cell-input.label-input {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .cell-input.num {
+        width: 52px;
+        text-align: end;
+    }
+
+    .select {
+        font-family: stat.$font-mono;
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border: 1px solid stat.$line;
+        border-radius: stat.$radius-sm;
+        background: stat.$surface;
+        color: stat.$ink;
+        max-width: 46%;
+
+        &.assign {
+            border-color: stat.$critical;
+            color: stat.$critical;
+        }
+        &:focus-visible {
+            outline: 2px solid stat.$primary;
+            outline-offset: -1px;
+        }
+    }
+
+    .counts {
+        @include stat.readout;
+        font-size: 0.78rem;
+        color: stat.$ink-soft;
+        white-space: nowrap;
+
+        &.editable {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+    }
+
+    .of {
         color: stat.$ink-soft;
     }
 
-    .prow .status {
-        @include stat.readout;
-        font-size: 0.68rem;
-        letter-spacing: 0.04em;
-        width: 58px;
-        text-align: end;
+    .row-remove {
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: stat.$ink-soft;
+        font-size: 1.1rem;
+        line-height: 1;
+        padding: 0 2px;
 
-        &.ok {
-            color: stat.$stable;
-        }
-        &.miss {
+        &:hover {
             color: stat.$critical;
         }
-        &.skip {
-            color: stat.$muted;
+        &:focus-visible {
+            outline: 2px solid stat.$primary;
+            outline-offset: 2px;
         }
     }
 
@@ -604,6 +923,31 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         font-size: 0.78rem;
         line-height: 1.5;
         margin: 10px 0 0;
+    }
+
+    .assign-note {
+        color: stat.$ink;
+    }
+
+    .warnings {
+        margin-top: 10px;
+        font-size: 0.76rem;
+        color: stat.$ink-soft;
+
+        summary {
+            cursor: pointer;
+            font-family: stat.$font-mono;
+            letter-spacing: 0.03em;
+        }
+        ul {
+            margin: 6px 0 0;
+            padding-inline-start: 18px;
+        }
+        li {
+            margin: 2px 0;
+            font-family: stat.$font-mono;
+            word-break: break-word;
+        }
     }
 
     // --- the auto-link result ---------------------------------------------
@@ -625,6 +969,12 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         border-color: stat.$primary;
         border-inline-start-color: stat.$primary;
         background: stat.$primary-wash;
+    }
+
+    .result.errored {
+        border-color: stat.$critical;
+        border-inline-start-color: stat.$critical;
+        background: stat.$critical-wash;
     }
 
     .result-idle {
@@ -653,6 +1003,22 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         color: stat.$ink;
         font-size: clamp(1.05rem, 3.2vw, 1.3rem);
         margin: 10px 0 0;
+    }
+
+    .error-copy {
+        color: stat.$ink;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin: 10px 0 0;
+        max-width: 56ch;
+    }
+
+    .error-detail {
+        @include stat.readout;
+        font-size: 0.76rem;
+        color: stat.$critical;
+        margin: 8px 0 0;
+        word-break: break-word;
     }
 
     .topic-chips {
