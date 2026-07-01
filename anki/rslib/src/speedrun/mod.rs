@@ -13,6 +13,7 @@ mod attempts;
 pub mod bench;
 pub mod focus;
 pub mod mastery;
+mod performance;
 pub mod score;
 mod service;
 pub mod store;
