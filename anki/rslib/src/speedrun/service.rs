@@ -54,6 +54,6 @@ impl crate::services::SpeedrunService for Collection {
     }
 
     fn get_memory_score(&mut self) -> error::Result<anki_proto::speedrun::MemoryScore> {
-        Ok(anki_proto::speedrun::MemoryScore::default())
+        self.memory_score()
     }
 }
