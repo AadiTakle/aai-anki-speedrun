@@ -9,5 +9,6 @@
 //! Wednesday-slice features (F1, F4, F6) fill in. See docs/wednesday_plan.md.
 
 pub mod mastery;
+pub mod score;
 mod service;
 pub mod store;

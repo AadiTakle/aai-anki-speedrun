@@ -45,8 +45,8 @@ impl Collection {
     /// An empty `topic_ids` means "every topic in the stored taxonomy" (ordered
     /// deterministically by id). Otherwise exactly the requested topics, in the
     /// requested order — one [`TopicMastery`] per topic considered, even when a
-    /// topic has no mapped cards (it reports zeros). See the module docs for the
-    /// exact `mastered`/`total`/`avg_recall` definitions.
+    /// topic has no mapped cards (it reports zeros). See the module docs for
+    /// the exact `mastered`/`total`/`avg_recall` definitions.
     pub(crate) fn topic_mastery(&mut self, topic_ids: Vec<String>) -> Result<TopicMasteryResponse> {
         let topics = self.speedrun_topics()?;
         let card_topics = self.speedrun_card_topics()?;
@@ -89,7 +89,8 @@ impl Collection {
                             mastered += 1;
                         }
                         if let Some(state) = card.memory_state {
-                            let elapsed = card.seconds_since_last_review(&timing).unwrap_or_default();
+                            let elapsed =
+                                card.seconds_since_last_review(&timing).unwrap_or_default();
                             let r = fsrs.current_retrievability_seconds(
                                 state.into(),
                                 elapsed,
@@ -224,7 +225,10 @@ mod test {
 
         let cardio = find(&resp, "cardio");
         assert_eq!(cardio.total, 3, "dangling id and renal card excluded");
-        assert_eq!(cardio.mastered, 2, "interval 30 and 21 are mature; 5 is not");
+        assert_eq!(
+            cardio.mastered, 2,
+            "interval 30 and 21 are mature; 5 is not"
+        );
 
         let renal = find(&resp, "renal");
         assert_eq!(renal.total, 1);
@@ -283,9 +287,9 @@ mod test {
         Ok(())
     }
 
-    /// avg_recall is always within [0,1]: with FSRS memory state present it is a
-    /// real retrievability in range; a topic whose review cards lack a memory
-    /// state reports exactly 0.0.
+    /// avg_recall is always within [0,1]: with FSRS memory state present it is
+    /// a real retrievability in range; a topic whose review cards lack a
+    /// memory state reports exactly 0.0.
     #[test]
     fn avg_recall_within_bounds() -> Result<()> {
         let mut col = Collection::new();
@@ -327,7 +331,10 @@ mod test {
         }
 
         let cardio = find(&resp, "cardio");
-        assert!(cardio.avg_recall > 0.0, "memory-backed recall should be > 0");
+        assert!(
+            cardio.avg_recall > 0.0,
+            "memory-backed recall should be > 0"
+        );
 
         let renal = find(&resp, "renal");
         assert_eq!(renal.avg_recall, 0.0, "no memory state -> 0.0");

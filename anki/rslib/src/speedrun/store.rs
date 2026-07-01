@@ -5,9 +5,9 @@
 //! per-topic weakness.
 //!
 //! Everything is stored as JSON in the existing `col.conf` (config table) under
-//! dedicated `speedrun:*` keys — there is no new SQLite schema or migration (see
-//! docs/wednesday_plan.md §2). Writes go through the standard config/op/undo
-//! machinery so they are sync-safe and undo-safe.
+//! dedicated `speedrun:*` keys — there is no new SQLite schema or migration
+//! (see docs/wednesday_plan.md §2). Writes go through the standard
+//! config/op/undo machinery so they are sync-safe and undo-safe.
 //!
 //! This module owns the **internal Rust accessor API** that downstream features
 //! depend on (F4 mastery, F5 points-at-stake queue, F6 memory score). The
@@ -51,8 +51,9 @@ impl Collection {
     ///
     /// Returns an empty map when nothing has been stored yet.
     pub fn speedrun_card_topics(&self) -> Result<HashMap<CardId, String>> {
-        let stored: HashMap<String, String> =
-            self.get_config_optional(CARD_TOPICS_KEY).unwrap_or_default();
+        let stored: HashMap<String, String> = self
+            .get_config_optional(CARD_TOPICS_KEY)
+            .unwrap_or_default();
         let mut out = HashMap::with_capacity(stored.len());
         for (card_id, topic_id) in stored {
             let id = match card_id.parse::<i64>() {
@@ -215,8 +216,8 @@ mod test {
         Ok(())
     }
 
-    /// R3: undo after `set_topic_weights` restores the previous config state and
-    /// leaves the database uncorrupted.
+    /// R3: undo after `set_topic_weights` restores the previous config state
+    /// and leaves the database uncorrupted.
     #[test]
     fn undo_restores_previous_state() -> Result<()> {
         let mut col = Collection::new();

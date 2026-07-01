@@ -415,7 +415,11 @@ mod test {
             note.set_field(0, "foo").unwrap();
             note.id.0 = 0;
             self.add_note(&mut note, deck).unwrap();
-            let mut card = self.storage.get_card_by_ordinal(note.id, 0).unwrap().unwrap();
+            let mut card = self
+                .storage
+                .get_card_by_ordinal(note.id, 0)
+                .unwrap()
+                .unwrap();
             // All test review cards share the same due/interval so the gather-time
             // SQL ordering is a tie and the points-at-stake post-sort dominates.
             card.interval = 10;
@@ -521,8 +525,8 @@ mod test {
         Ok(())
     }
 
-    /// R3: building + answering through the points-at-stake queue, then undoing,
-    /// restores prior state and leaves the database uncorrupted.
+    /// R3: building + answering through the points-at-stake queue, then
+    /// undoing, restores prior state and leaves the database uncorrupted.
     #[test]
     fn points_at_stake_answer_then_undo_is_safe() -> Result<()> {
         let mut col = Collection::new();

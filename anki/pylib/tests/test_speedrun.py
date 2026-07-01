@@ -1,20 +1,23 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Python-side coverage for the Speedrun points-at-stake review queue (F5).
+"""Python-side coverage for the Speedrun engine additions.
 
-Mirrors the Rust acceptance tests: with topics weighted and per-topic weakness
-seeded, selecting the points-at-stake review order makes the queue come out
-sorted by ``blueprint_weight * weakness`` descending.
+Mirrors the Rust acceptance tests through the ``col`` backend:
+
+* F5 — with topics weighted and per-topic weakness seeded, selecting the
+  points-at-stake review order makes the queue come out sorted by
+  ``blueprint_weight * weakness`` descending.
+* F6 — a fresh collection has no graded reviews and no blueprint coverage, so
+  the backend must abstain (never fabricate a readiness number) while still
+  reporting a real coverage of 0% and non-empty reasons.
 """
 
 from anki import deck_config_pb2, speedrun_pb2
 from anki.consts import CARD_TYPE_REV, QUEUE_TYPE_REV
 from tests.shared import getEmptyCol
 
-POINTS_AT_STAKE = (
-    deck_config_pb2.DeckConfig.Config.REVIEW_CARD_ORDER_POINTS_AT_STAKE
-)
+POINTS_AT_STAKE = deck_config_pb2.DeckConfig.Config.REVIEW_CARD_ORDER_POINTS_AT_STAKE
 
 
 def _add_due_review_card(col, front: str) -> int:
@@ -68,3 +71,13 @@ def test_points_at_stake_queue_orders_highest_first():
     ordered = [qc.card.id for qc in queued.cards]
 
     assert ordered == [cardio, renal, gi]
+
+
+def test_memory_score_abstains_on_fresh_collection():
+    col = getEmptyCol()
+
+    score = col._backend.get_memory_score()
+
+    assert score.abstained is True
+    assert score.coverage_pct == 0.0
+    assert len(score.reasons) > 0
