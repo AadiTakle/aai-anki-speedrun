@@ -578,6 +578,45 @@ mod test {
         Ok(())
     }
 
+    /// Deterministic tie-break: cards whose topics have EQUAL points-at-stake
+    /// (`weight * weakness`) keep their gather-time order, because the
+    /// post-sort is stable. Verified by comparing against the plain gather
+    /// order (Day), which is what points-at-stake gathers with before
+    /// reordering.
+    #[test]
+    fn points_at_stake_equal_scores_keep_gather_order() -> Result<()> {
+        let mut col = Collection::new();
+        let mut deck = col.get_or_create_normal_deck("Default").unwrap();
+        let nt = col.get_notetype_by_name("Basic")?.unwrap();
+
+        // Three topics with identical points-at-stake: 0.5*0.4 == 0.4*0.5 ==
+        // 0.2*1.0 == 0.20, so the sort key is a three-way tie.
+        let a = col.add_due_review_card(&nt, deck.id);
+        let b = col.add_due_review_card(&nt, deck.id);
+        let c = col.add_due_review_card(&nt, deck.id);
+
+        col.seed_topic_weights(
+            &[("t_a", 0.5), ("t_b", 0.4), ("t_c", 0.2)],
+            &[("t_a", 0.4), ("t_b", 0.5), ("t_c", 1.0)],
+            &[(a, "t_a"), (b, "t_b"), (c, "t_c")],
+        );
+
+        // Gather order under the plain Day order (what points-at-stake gathers
+        // with before the post-sort).
+        col.set_deck_review_order(&mut deck, ReviewCardOrder::Day);
+        let gather_order = col.queue_as_card_ids(deck.id);
+
+        col.set_deck_review_order(&mut deck, ReviewCardOrder::PointsAtStake);
+        let pas_order = col.queue_as_card_ids(deck.id);
+
+        assert_eq!(
+            pas_order, gather_order,
+            "equal points-at-stake must preserve gather order (stable sort)"
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn should_build_empty_queue_if_limit_is_reached() {
         let mut col = Collection::new();

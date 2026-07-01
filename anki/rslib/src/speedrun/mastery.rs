@@ -10,19 +10,21 @@
 //!
 //! Definitions (frozen with the Wednesday contract, docs/wednesday_plan.md §5):
 //! - **total**: the cards mapped to the topic via the crosswalk that still
-//!   exist in the collection (dangling crosswalk ids are skipped).
+//!   exist in the collection and are in active study. Dangling crosswalk ids
+//!   are skipped, and so are **suspended/buried** cards (they are not part of
+//!   active study, so they count toward neither `total` nor `mastered`).
 //! - **mastered**: of those, the cards that are **mature** — in the Review
 //!   state with `interval >= 21` days. 21 days is Anki's standard "mature"
 //!   threshold (`MATURE_EVL`/`graph_cutoff` upstream), so a card is mastered
 //!   exactly when it is a real review card whose current interval has reached
 //!   maturity. New/learning/relearning cards are never mastered.
 //! - **avg_recall**: the mean of the *current FSRS retrievability* over the
-//!   topic's Review-state cards that have an FSRS memory state, computed the
-//!   same way as card stats (`current_retrievability_seconds(memory_state,
-//!   seconds_since_last_review, decay)`). Review cards without a memory state
-//!   (FSRS never run / SM-2 collection) are excluded from the mean; when no
-//!   review card has a memory state the topic's `avg_recall` is `0.0`. The
-//!   result is clamped to [0, 1].
+//!   topic's Review-state cards that have an FSRS memory state, using the same
+//!   formula as card stats (`current_retrievability_seconds(memory_state,
+//!   seconds_since_last_review, decay)`), restricted here to Review-state
+//!   cards. Review cards without a memory state (FSRS never run / SM-2
+//!   collection) are excluded from the mean; when no review card has a memory
+//!   state the topic's `avg_recall` is `0.0`. The result is clamped to [0, 1].
 
 use std::collections::HashMap;
 
@@ -31,6 +33,7 @@ use anki_proto::speedrun::TopicMasteryResponse;
 use fsrs::FSRS;
 use fsrs::FSRS5_DEFAULT_DECAY;
 
+use crate::card::CardQueue;
 use crate::card::CardType;
 use crate::prelude::*;
 
@@ -83,6 +86,16 @@ impl Collection {
                     let Some(card) = self.storage.get_card(cid)? else {
                         continue;
                     };
+                    // Suspended and buried cards are not part of active study, so
+                    // they don't count toward a topic's mastery (mirrors Anki's
+                    // per-state count convention — see CardQueueNumber::Invalid —
+                    // and the product's selective-unsuspension workflow).
+                    if matches!(
+                        card.queue,
+                        CardQueue::Suspended | CardQueue::SchedBuried | CardQueue::UserBuried
+                    ) {
+                        continue;
+                    }
                     total += 1;
                     if card.ctype == CardType::Review {
                         if card.interval >= MATURE_INTERVAL_DAYS {
@@ -163,6 +176,19 @@ mod test {
         card.id
     }
 
+    /// Add a Review-state card directly in the given queue (e.g. Suspended /
+    /// buried), returning its id. Used to verify non-active cards are excluded.
+    fn add_review_card_in_queue(col: &mut Collection, interval: u32, queue: CardQueue) -> CardId {
+        let mut card = Card {
+            ctype: CardType::Review,
+            queue,
+            interval,
+            ..Default::default()
+        };
+        col.add_card(&mut card).unwrap();
+        card.id
+    }
+
     fn topic(id: &str) -> Topic {
         Topic {
             id: id.into(),
@@ -233,6 +259,37 @@ mod test {
         let renal = find(&resp, "renal");
         assert_eq!(renal.total, 1);
         assert_eq!(renal.mastered, 1);
+
+        Ok(())
+    }
+
+    /// Suspended and buried cards are excluded from a topic's counts entirely
+    /// (neither `total` nor `mastered`), matching active-study semantics.
+    #[test]
+    fn suspended_and_buried_excluded() -> Result<()> {
+        let mut col = Collection::new();
+        let active = add_card(&mut col, CardType::Review, 30, None);
+        let suspended = add_review_card_in_queue(&mut col, 30, CardQueue::Suspended);
+        let sched_buried = add_review_card_in_queue(&mut col, 30, CardQueue::SchedBuried);
+        let user_buried = add_review_card_in_queue(&mut col, 30, CardQueue::UserBuried);
+
+        seed(
+            &mut col,
+            &["cardio"],
+            &[
+                (active.0, "cardio"),
+                (suspended.0, "cardio"),
+                (sched_buried.0, "cardio"),
+                (user_buried.0, "cardio"),
+            ],
+        );
+
+        let resp = col
+            .get_topic_mastery(GetTopicMasteryRequest::default())?
+            .topics;
+        let cardio = find(&resp, "cardio");
+        assert_eq!(cardio.total, 1, "only the active review card is counted");
+        assert_eq!(cardio.mastered, 1, "suspended/buried are not mastered");
 
         Ok(())
     }

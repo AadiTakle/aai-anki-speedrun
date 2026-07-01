@@ -37,6 +37,26 @@ pub struct TopicInfo {
     pub blueprint_weight: f64,
 }
 
+/// Clamp to a finite, non-negative value (non-finite -> 0.0). Used for
+/// `blueprint_weight`, which the contract documents as `>= 0`.
+fn sanitize_non_negative(v: f64) -> f64 {
+    if v.is_finite() {
+        v.max(0.0)
+    } else {
+        0.0
+    }
+}
+
+/// Clamp to the closed unit interval `[0, 1]` (non-finite -> 0.0). Used for
+/// per-topic `weakness`, which the contract documents as `0.0..=1.0`.
+fn sanitize_unit_interval(v: f64) -> f64 {
+    if v.is_finite() {
+        v.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 impl Collection {
     /// Canonical topic taxonomy: `topic_id -> {name, blueprint_weight}`.
     ///
@@ -84,6 +104,27 @@ impl Collection {
         card_topics: HashMap<CardId, String>,
         weakness: HashMap<String, f64>,
     ) -> Result<OpChanges> {
+        // Clamp caller-supplied values to their documented ranges before
+        // storing, so an out-of-range weight/weakness can't silently invert the
+        // points-at-stake ordering (F5) or skew the memory score (F6):
+        // blueprint_weight >= 0, weakness in [0, 1], non-finite -> 0.0.
+        let topics: HashMap<String, TopicInfo> = topics
+            .into_iter()
+            .map(|(id, t)| {
+                (
+                    id,
+                    TopicInfo {
+                        blueprint_weight: sanitize_non_negative(t.blueprint_weight),
+                        ..t
+                    },
+                )
+            })
+            .collect();
+        let weakness: HashMap<String, f64> = weakness
+            .into_iter()
+            .map(|(id, w)| (id, sanitize_unit_interval(w)))
+            .collect();
+
         // JSON object keys must be strings, so the crosswalk is stored with the
         // card id stringified; the accessor parses it back to a CardId.
         let stored_card_topics: HashMap<String, String> = card_topics
@@ -271,6 +312,61 @@ mod test {
         assert!(col.speedrun_topics()?.is_empty());
         assert!(col.speedrun_card_topics()?.is_empty());
         assert!(col.speedrun_topic_weakness()?.is_empty());
+        Ok(())
+    }
+
+    /// R5 (review fix): out-of-range caller values are clamped at the write
+    /// boundary — negative/`NaN` weights become `0.0`, and weakness is confined
+    /// to `[0, 1]` (non-finite -> `0.0`) — so downstream ordering (F5) and
+    /// scoring (F6) can trust the stored values.
+    #[test]
+    fn clamps_out_of_range_values() -> Result<()> {
+        let mut col = Collection::new();
+        let _ = col.set_topic_weights(SetTopicWeightsRequest {
+            topics: vec![
+                Topic {
+                    id: "neg".into(),
+                    name: "neg".into(),
+                    blueprint_weight: -5.0,
+                },
+                Topic {
+                    id: "nan".into(),
+                    name: "nan".into(),
+                    blueprint_weight: f64::NAN,
+                },
+                Topic {
+                    id: "ok".into(),
+                    name: "ok".into(),
+                    blueprint_weight: 2.5,
+                },
+            ],
+            card_topics: vec![],
+            weaknesses: vec![
+                TopicWeakness {
+                    topic_id: "low".into(),
+                    weakness: -0.3,
+                },
+                TopicWeakness {
+                    topic_id: "high".into(),
+                    weakness: 4.0,
+                },
+                TopicWeakness {
+                    topic_id: "inf".into(),
+                    weakness: f64::INFINITY,
+                },
+            ],
+        })?;
+
+        let topics = col.speedrun_topics()?;
+        assert_eq!(topics.get("neg").unwrap().blueprint_weight, 0.0);
+        assert_eq!(topics.get("nan").unwrap().blueprint_weight, 0.0);
+        assert_eq!(topics.get("ok").unwrap().blueprint_weight, 2.5);
+
+        let weakness = col.speedrun_topic_weakness()?;
+        assert_eq!(weakness.get("low"), Some(&0.0));
+        assert_eq!(weakness.get("high"), Some(&1.0));
+        assert_eq!(weakness.get("inf"), Some(&0.0));
+
         Ok(())
     }
 }
