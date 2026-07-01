@@ -114,6 +114,13 @@ export function reviewOrderChoices(
                 label: tr.decksLatestAddedFirst(),
                 value: DeckConfig_Config_ReviewCardOrder.REVERSE_ADDED,
             },
+            {
+                // Speedrun (USMLE Step 2 CK): recency-decayed weighted interleaving
+                // by blueprint_weight(topic) * weakness(topic). Plain label (no ftl
+                // string) since this is a Speedrun-specific addition.
+                label: "Points at stake (Speedrun)",
+                value: DeckConfig_Config_ReviewCardOrder.POINTS_AT_STAKE,
+            },
         ],
     ];
 }
