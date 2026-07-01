@@ -81,8 +81,7 @@ export const SESSION_CARDS: ReviewCard[] = [
         provenance: { source: "UWorld Q#14", topic: "Acid\u2013base", system: "Renal", ageLabel: "2h ago" },
         acuity: "critical",
         points: 9.1,
-        question:
-            "28-year-old in DKA. ABG shows a metabolic acidosis: HCO\u2083\u207b 14 mEq/L, PaCO\u2082 30 mmHg. "
+        question: "28-year-old in DKA. ABG shows a metabolic acidosis: HCO\u2083\u207b 14 mEq/L, PaCO\u2082 30 mmHg. "
             + "Which PaCO\u2082 confirms **appropriate respiratory compensation**?",
         answer:
             "Winter's formula: expected PaCO\u2082 = 1.5 \u00d7 [HCO\u2083\u207b] + 8 \u00b1 2 = 1.5(14) + 8 = **29 \u00b1 2 mmHg**. "
@@ -102,19 +101,21 @@ export const SESSION_CARDS: ReviewCard[] = [
     },
     {
         id: "cards-vt-vs-svt",
-        provenance: { source: "UWorld Q#31", topic: "Wide-complex tachycardia", system: "Cardiology", ageLabel: "2h ago" },
+        provenance: {
+            source: "UWorld Q#31",
+            topic: "Wide-complex tachycardia",
+            system: "Cardiology",
+            ageLabel: "2h ago",
+        },
         acuity: "critical",
         points: 8.4,
-        question:
-            "68-year-old with **prior myocardial infarction**, regular wide-complex tachycardia at 160/min, "
+        question: "68-year-old with **prior myocardial infarction**, regular wide-complex tachycardia at 160/min, "
             + "hemodynamically stable. Most likely rhythm?",
-        answer:
-            "**Ventricular tachycardia.** Structural heart disease (prior MI) makes VT far more likely than SVT "
+        answer: "**Ventricular tachycardia.** Structural heart disease (prior MI) makes VT far more likely than SVT "
             + "with aberrancy \u2014 a regular wide-complex tachycardia is VT until proven otherwise.",
         reframe: {
             wrongAnswer: "SVT with aberrancy",
-            differential:
-                "You'd need no structural heart disease plus a rate-dependent bundle-branch morphology (or a "
+            differential: "You'd need no structural heart disease plus a rate-dependent bundle-branch morphology (or a "
                 + "documented prior identical narrow-complex SVT) \u2014 then aberrancy climbs the differential.",
             takeaway: "Wide-complex tachycardia + structural heart disease = VT until proven otherwise.",
         },
@@ -126,11 +127,9 @@ export const SESSION_CARDS: ReviewCard[] = [
         provenance: { source: "UWorld Q#22", topic: "Ischemic stroke", system: "Neurology", ageLabel: "5h ago" },
         acuity: "critical",
         points: 7.8,
-        question:
-            "70-year-old with sudden right hemiparesis and aphasia, last known well **3 hours ago**. "
+        question: "70-year-old with sudden right hemiparesis and aphasia, last known well **3 hours ago**. "
             + "Non-contrast CT shows no hemorrhage. Best next step?",
-        answer:
-            "**IV alteplase (tPA).** Within 4.5 h of last-known-well, with hemorrhage excluded and no "
+        answer: "**IV alteplase (tPA).** Within 4.5 h of last-known-well, with hemorrhage excluded and no "
             + "contraindications, thrombolysis is indicated \u2014 then assess for thrombectomy if a large-vessel "
             + "occlusion is present.",
         reframe: {
@@ -150,11 +149,9 @@ export const SESSION_CARDS: ReviewCard[] = [
         provenance: { source: "UWorld Q#12", topic: "Hyponatremia", system: "Renal", ageLabel: "2h ago" },
         acuity: "watch",
         points: 5.2,
-        question:
-            "72-year-old on **hydrochlorothiazide**. Na\u207a 124, clinically euvolemic, urine osm 420 mOsm/kg, "
+        question: "72-year-old on **hydrochlorothiazide**. Na\u207a 124, clinically euvolemic, urine osm 420 mOsm/kg, "
             + "urine Na\u207a 45 mEq/L. Best explanation for the hyponatremia?",
-        answer:
-            "**Thiazide-induced hyponatremia.** Thiazides impair urinary dilution and can mimic SIADH's labs; "
+        answer: "**Thiazide-induced hyponatremia.** Thiazides impair urinary dilution and can mimic SIADH's labs; "
             + "the drug history is the pivot clue over a primary SIADH cause.",
         reframe: {
             wrongAnswer: "SIADH",
@@ -171,11 +168,9 @@ export const SESSION_CARDS: ReviewCard[] = [
         provenance: { source: "UWorld Q#08", topic: "Pulmonary embolism", system: "Pulmonology", ageLabel: "5h ago" },
         acuity: "watch",
         points: 4.6,
-        question:
-            "Post-op patient with sudden dyspnea and pleuritic chest pain, HR 110, **SpO\u2082 89%**, "
+        question: "Post-op patient with sudden dyspnea and pleuritic chest pain, HR 110, **SpO\u2082 89%**, "
             + "hemodynamically stable. High pretest probability. Best initial diagnostic test?",
-        answer:
-            "**CT pulmonary angiography.** With a high pretest probability and a stable patient, CTPA is the "
+        answer: "**CT pulmonary angiography.** With a high pretest probability and a stable patient, CTPA is the "
             + "initial test \u2014 a D-dimer can't rule out PE when pretest probability is high.",
         reframe: {
             wrongAnswer: "D-dimer",
@@ -192,11 +187,9 @@ export const SESSION_CARDS: ReviewCard[] = [
         provenance: { source: "UWorld Q#15", topic: "Hyperthyroidism", system: "Endocrine", ageLabel: "5h ago" },
         acuity: "stable",
         points: 2.4,
-        question:
-            "Woman with palpitations, weight loss, a **diffuse goiter**, and proptosis. TSH low, free T4 high. "
+        question: "Woman with palpitations, weight loss, a **diffuse goiter**, and proptosis. TSH low, free T4 high. "
             + "Most likely diagnosis?",
-        answer:
-            "**Graves disease.** Diffuse goiter + ophthalmopathy + low TSH / high T4 points to autoimmune (TSI) "
+        answer: "**Graves disease.** Diffuse goiter + ophthalmopathy + low TSH / high T4 points to autoimmune (TSI) "
             + "hyperthyroidism; confirm with elevated TSI or diffuse uptake on RAIU.",
         reframe: {
             wrongAnswer: "toxic multinodular goiter",

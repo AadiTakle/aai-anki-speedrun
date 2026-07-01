@@ -14,7 +14,12 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
     import { AppShell, Chip, StatusDot } from "$lib/speedrun";
     import type { Acuity } from "$lib/speedrun";
 
-    import { ERROR_ENTRIES, KIND_META, type ErrorEntry, type ErrorKind } from "./errors-mock";
+    import {
+        ERROR_ENTRIES,
+        KIND_META,
+        type ErrorEntry,
+        type ErrorKind,
+    } from "./errors-mock";
 
     const entries = ERROR_ENTRIES;
 
@@ -29,8 +34,12 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
 
     // Per-entry local state (no persistence needed for the mock).
     let filter: Filter = "all";
-    let takeaways: Record<string, string> = Object.fromEntries(entries.map((e) => [e.id, e.takeaway]));
-    let marked: Record<string, boolean> = Object.fromEntries(entries.map((e) => [e.id, false]));
+    const takeaways: Record<string, string> = Object.fromEntries(
+        entries.map((e) => [e.id, e.takeaway]),
+    );
+    let marked: Record<string, boolean> = Object.fromEntries(
+        entries.map((e) => [e.id, false]),
+    );
     let expanded: Record<string, boolean> = { [entries[0].id]: true };
 
     interface Group {
@@ -42,7 +51,10 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
     const RANK: Record<Acuity, number> = { critical: 3, watch: 2, stable: 1, muted: 0 };
 
     function groupAcuity(list: ErrorEntry[]): Acuity {
-        return list.reduce<Acuity>((worst, e) => (RANK[e.acuity] > RANK[worst] ? e.acuity : worst), "muted");
+        return list.reduce<Acuity>(
+            (worst, e) => (RANK[e.acuity] > RANK[worst] ? e.acuity : worst),
+            "muted",
+        );
     }
 
     function groupByConfusion(list: ErrorEntry[]): Group[] {
@@ -77,7 +89,9 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
     }
 
     function kindCount(k: Filter): number {
-        return k === "all" ? entries.length : entries.filter((e) => e.kind === k).length;
+        return k === "all"
+            ? entries.length
+            : entries.filter((e) => e.kind === k).length;
     }
 
     $: visible = filter === "all" ? entries : entries.filter((e) => e.kind === filter);
@@ -93,10 +107,12 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
             <p class="eyebrow">Reframe · the differential</p>
             <h1 class="headline">Every miss becomes a reasoning artifact</h1>
             <p class="lede">
-                Not a re-read. Each miss opens around one prompt — <em
-                    >"How would the vignette need to change for your wrong answer to be right?"</em
-                > — so you capture the distinction the exam actually tests, tag the error type, and keep it
-                linked to the cards it unsuspended.
+                Not a re-read. Each miss opens around one prompt — <em>
+                    "How would the vignette need to change for your wrong answer to be
+                    right?"
+                </em>
+                 — so you capture the distinction the exam actually tests, tag the error type,
+                and keep it linked to the cards it unsuspended.
             </p>
         </header>
 
@@ -155,12 +171,24 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
                                 <span class="entry-spacer"></span>
                                 {#if marked[entry.id]}
                                     <span class="logged-flag">
-                                        <StatusDot acuity="stable" size={7} shape="round" /> logged
+                                        <StatusDot
+                                            acuity="stable"
+                                            size={7}
+                                            shape="round"
+                                        /> logged
                                     </span>
                                 {/if}
-                                <span class="kind-tag">{KIND_META[entry.kind].label}</span>
+                                <span class="kind-tag">
+                                    {KIND_META[entry.kind].label}
+                                </span>
                                 <span class="cards">{entry.cards} cards</span>
-                                <span class="chevron" class:open={expanded[entry.id]} aria-hidden="true">▾</span>
+                                <span
+                                    class="chevron"
+                                    class:open={expanded[entry.id]}
+                                    aria-hidden="true"
+                                >
+                                    ▾
+                                </span>
                             </button>
 
                             {#if expanded[entry.id]}
@@ -169,21 +197,31 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
                                         <p class="eyebrow accent">Reframe prompt</p>
                                         <p class="reframe-q">
                                             How would the vignette need to change for
-                                            <strong>"{entry.chosen}"</strong> to be the right answer?
+                                            <strong>"{entry.chosen}"</strong>
+                                             to be the right answer?
                                         </p>
                                     </div>
 
                                     <div class="takeaway">
                                         {#if marked[entry.id]}
-                                            <p class="eyebrow">Your one-line takeaway</p>
+                                            <p class="eyebrow">
+                                                Your one-line takeaway
+                                            </p>
                                             <blockquote class="takeaway-locked">
                                                 {takeaways[entry.id]}
                                             </blockquote>
-                                            <button type="button" class="linklike" on:click={() => reopen(entry.id)}>
+                                            <button
+                                                type="button"
+                                                class="linklike"
+                                                on:click={() => reopen(entry.id)}
+                                            >
                                                 Reopen to edit
                                             </button>
                                         {:else}
-                                            <label class="eyebrow" for={"takeaway-" + entry.id}>
+                                            <label
+                                                class="eyebrow"
+                                                for={"takeaway-" + entry.id}
+                                            >
                                                 Your one-line takeaway
                                             </label>
                                             <textarea
@@ -197,8 +235,11 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
                                                 <button
                                                     type="button"
                                                     class="btn primary"
-                                                    disabled={(takeaways[entry.id] ?? "").trim().length === 0}
-                                                    on:click={() => markTakeaway(entry.id)}
+                                                    disabled={(
+                                                        takeaways[entry.id] ?? ""
+                                                    ).trim().length === 0}
+                                                    on:click={() =>
+                                                        markTakeaway(entry.id)}
                                                 >
                                                     Mark takeaway
                                                 </button>
@@ -208,12 +249,17 @@ grouping. Built on the shared foundation ($lib/speedrun); illustrative data only
 
                                     <div class="meta">
                                         <span class="meta-tag">
-                                            <StatusDot acuity={KIND_META[entry.kind].acuity} size={7} />
+                                            <StatusDot
+                                                acuity={KIND_META[entry.kind].acuity}
+                                                size={7}
+                                            />
                                             {KIND_META[entry.kind].label} — {entry.kindDetail}
                                         </span>
                                         <span class="meta-spacer"></span>
                                         <span class="meta-source">{entry.source}</span>
-                                        <span class="meta-cards">linked {entry.cards} cards →</span>
+                                        <span class="meta-cards">
+                                            linked {entry.cards} cards →
+                                        </span>
                                     </div>
                                 </div>
                             {/if}

@@ -38,14 +38,19 @@ highlighted, graded cards read as done, upcoming as dimmed.
         <span class="spacer"></span>
         {#if current}
             <Chip dot={pacing}>
-                {slow ? "SLOW" : "PACING"} {elapsedWhole}s · target {current.targetSeconds}s
+                {slow ? "SLOW" : "PACING"}
+                {elapsedWhole}s · target {current.targetSeconds}s
             </Chip>
         {/if}
     </div>
 
     <div class="order">
         <span class="order-label">Order</span>
-        <div class="bars" role="img" aria-label="Cards ordered by points at stake, highest first">
+        <div
+            class="bars"
+            role="img"
+            aria-label="Cards ordered by points at stake, highest first"
+        >
             {#each cards as card, i (card.id)}
                 <span
                     class="bar"

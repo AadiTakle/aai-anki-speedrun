@@ -42,21 +42,44 @@ The builder returns a flat, non-nullable model so the markup stays simple.
         const YB = compact ? 98 : 250;
 
         const isReadiness = metric === "readiness";
-        const series = metric === "coverage" ? COVERAGE : metric === "stability" ? STABILITY : [];
+        // Flatten metric-based selection to satisfy no-nested-ternary.
+        function pick<T>(coverage: T, stability: T, other: T): T {
+            if (metric === "coverage") {
+                return coverage;
+            }
+            if (metric === "stability") {
+                return stability;
+            }
+            return other;
+        }
+        let series: typeof COVERAGE | typeof STABILITY | never[] = [];
+        if (metric === "coverage") {
+            series = COVERAGE;
+        } else if (metric === "stability") {
+            series = STABILITY;
+        }
         const vFloor = isReadiness ? 205 : 0;
-        const vMax = metric === "coverage" ? 100 : metric === "stability" ? 28 : 262;
-        const unit = metric === "coverage" ? "%" : metric === "stability" ? "d" : "";
+        const vMax = pick(100, 28, 262);
+        const unit = pick("%", "d", "");
 
         const xAt = (i: number): number => X0 + (i / (N - 1)) * (X1 - X0);
-        const yAt = (v: number): number => YB - ((v - vFloor) / (vMax - vFloor)) * (YB - YT);
+        const yAt = (v: number): number =>
+            YB - ((v - vFloor) / (vMax - vFloor)) * (YB - YT);
 
-        const gridVals = isReadiness
-            ? [PASS, TARGET, 260]
-            : metric === "coverage"
-              ? [25, 50, 75, 100]
-              : [7, 14, 21, 28];
+        let gridVals: number[];
+        if (isReadiness) {
+            gridVals = [PASS, TARGET, 260];
+        } else if (metric === "coverage") {
+            gridVals = [25, 50, 75, 100];
+        } else {
+            gridVals = [7, 14, 21, 28];
+        }
         const gridLines = gridVals.map((g) => ({ g, y: yAt(g), label: `${g}${unit}` }));
-        const weekLabels = WEEKS.map((label, i) => ({ x: xAt(i), label, exam: label === "Exam" }));
+        const weekLabels = WEEKS.map((label, i) => ({
+            x: xAt(i),
+            label,
+            exam: label === "Exam",
+        }));
 
         // Readiness band pieces.
         let bandPoints = "";
@@ -100,19 +123,23 @@ The builder returns a flat, non-nullable model so the markup stays simple.
                 .filter(({ r }) => r.pt !== null && !r.projection)
                 .map(({ i }) => i);
             const top = obs.map((i) => `${xAt(i)},${yAt(READINESS[i].hi as number)}`);
-            const bottom = [...obs].reverse().map((i) => `${xAt(i)},${yAt(READINESS[i].lo as number)}`);
+            const bottom = [...obs]
+                .reverse()
+                .map((i) => `${xAt(i)},${yAt(READINESS[i].lo as number)}`);
             bandPoints = [...top, ...bottom].join(" ");
-            centerPoints = obs.map((i) => `${xAt(i)},${yAt(READINESS[i].pt as number)}`).join(" ");
+            centerPoints = obs
+                .map((i) => `${xAt(i)},${yAt(READINESS[i].pt as number)}`)
+                .join(" ");
 
             const nowR = READINESS[NOW_INDEX];
             const projR = READINESS[NOW_INDEX + 1];
             if (nowR.pt !== null && projR.pt !== null) {
                 showNow = true;
                 projBandPoints =
-                    `${xAt(NOW_INDEX)},${yAt(nowR.hi as number)} `
-                    + `${xAt(NOW_INDEX + 1)},${yAt(projR.hi as number)} `
-                    + `${xAt(NOW_INDEX + 1)},${yAt(projR.lo as number)} `
-                    + `${xAt(NOW_INDEX)},${yAt(nowR.lo as number)}`;
+                    `${xAt(NOW_INDEX)},${yAt(nowR.hi as number)} ` +
+                    `${xAt(NOW_INDEX + 1)},${yAt(projR.hi as number)} ` +
+                    `${xAt(NOW_INDEX + 1)},${yAt(projR.lo as number)} ` +
+                    `${xAt(NOW_INDEX)},${yAt(nowR.lo as number)}`;
                 projCenterPoints = `${xAt(NOW_INDEX)},${yAt(nowR.pt)} ${xAt(NOW_INDEX + 1)},${yAt(projR.pt)}`;
                 nowDotX = xAt(NOW_INDEX);
                 nowDotY = yAt(nowR.pt);
@@ -133,13 +160,13 @@ The builder returns a flat, non-nullable model so the markup stays simple.
         } else {
             const idx = Array.from({ length: NOW_INDEX + 1 }, (_, i) => i);
             areaPoints =
-                `${xAt(0)},${YB} `
-                + idx.map((i) => `${xAt(i)},${yAt(series[i])}`).join(" ")
-                + ` ${xAt(NOW_INDEX)},${YB}`;
+                `${xAt(0)},${YB} ` +
+                idx.map((i) => `${xAt(i)},${yAt(series[i])}`).join(" ") +
+                ` ${xAt(NOW_INDEX)},${YB}`;
             linePoints = idx.map((i) => `${xAt(i)},${yAt(series[i])}`).join(" ");
             seriesProjPoints =
-                `${xAt(NOW_INDEX)},${yAt(series[NOW_INDEX])} `
-                + `${xAt(NOW_INDEX + 1)},${yAt(series[NOW_INDEX + 1])}`;
+                `${xAt(NOW_INDEX)},${yAt(series[NOW_INDEX])} ` +
+                `${xAt(NOW_INDEX + 1)},${yAt(series[NOW_INDEX + 1])}`;
             dots = idx.map((i) => ({ x: xAt(i), y: yAt(series[i]) }));
             showProjDot = true;
             projDotX = xAt(NOW_INDEX + 1);
@@ -154,23 +181,60 @@ The builder returns a flat, non-nullable model so the markup stays simple.
         }
 
         return {
-            W, H, X0, X1, YT, YB, gridLines, weekLabels, isReadiness,
-            bandPoints, centerPoints, projBandPoints, projCenterPoints,
-            showAbstain, abstainX, abstainW,
-            showNow, nowDotX, nowDotY, nowLabelX, nowLabelY, nowLabelText,
-            projLabelX, projLabelY, projLabelText, targetY, passY,
-            areaPoints, linePoints, seriesProjPoints, dots,
-            showProjDot, projDotX, projDotY, showUnlock, unlockY,
-            nowValueX, nowValueY, nowValueText,
+            W,
+            H,
+            X0,
+            X1,
+            YT,
+            YB,
+            gridLines,
+            weekLabels,
+            isReadiness,
+            bandPoints,
+            centerPoints,
+            projBandPoints,
+            projCenterPoints,
+            showAbstain,
+            abstainX,
+            abstainW,
+            showNow,
+            nowDotX,
+            nowDotY,
+            nowLabelX,
+            nowLabelY,
+            nowLabelText,
+            projLabelX,
+            projLabelY,
+            projLabelText,
+            targetY,
+            passY,
+            areaPoints,
+            linePoints,
+            seriesProjPoints,
+            dots,
+            showProjDot,
+            projDotX,
+            projDotY,
+            showUnlock,
+            unlockY,
+            nowValueX,
+            nowValueY,
+            nowValueText,
         };
     }
 
+    function titleFor(m: Metric): string {
+        if (m === "readiness") {
+            return "Readiness range trending toward the target by exam day";
+        }
+        if (m === "coverage") {
+            return "Blueprint coverage growth to exam day";
+        }
+        return "Mean memory stability growth to exam day";
+    }
+
     $: c = build(metric, compact);
-    $: title = metric === "readiness"
-        ? "Readiness range trending toward the target by exam day"
-        : metric === "coverage"
-          ? "Blueprint coverage growth to exam day"
-          : "Mean memory stability growth to exam day";
+    $: title = titleFor(metric);
 </script>
 
 <svg
@@ -186,7 +250,9 @@ The builder returns a flat, non-nullable model so the markup stays simple.
     {#each c.gridLines as gl (gl.g)}
         <line class="grid" x1={c.X0} y1={gl.y} x2={c.X1} y2={gl.y} />
         {#if !compact}
-            <text class="txt tick" x={c.X0 - 8} y={gl.y + 4} text-anchor="end">{gl.label}</text>
+            <text class="txt tick" x={c.X0 - 8} y={gl.y + 4} text-anchor="end">
+                {gl.label}
+            </text>
         {/if}
     {/each}
 
@@ -194,58 +260,156 @@ The builder returns a flat, non-nullable model so the markup stays simple.
 
     {#if !compact}
         {#each c.weekLabels as wl (wl.label)}
-            <text class="txt tick" class:exam={wl.exam} x={wl.x} y={c.YB + 18} text-anchor="middle">
+            <text
+                class="txt tick"
+                class:exam={wl.exam}
+                x={wl.x}
+                y={c.YB + 18}
+                text-anchor="middle"
+            >
                 {wl.label}
             </text>
         {/each}
     {/if}
 
     {#if c.isReadiness}
-        <line class="ref target" x1={c.X0} y1={c.targetY} x2={c.X1} y2={c.targetY} stroke-dasharray="6 4" />
-        <line class="ref pass" x1={c.X0} y1={c.passY} x2={c.X1} y2={c.passY} stroke-dasharray="2 3" />
+        <line
+            class="ref target"
+            x1={c.X0}
+            y1={c.targetY}
+            x2={c.X1}
+            y2={c.targetY}
+            stroke-dasharray="6 4"
+        />
+        <line
+            class="ref pass"
+            x1={c.X0}
+            y1={c.passY}
+            x2={c.X1}
+            y2={c.passY}
+            stroke-dasharray="2 3"
+        />
         {#if !compact}
-            <text class="txt ref-target" x={c.X1} y={c.targetY - 6} text-anchor="end">TARGET {TARGET}</text>
-            <text class="txt tick" x={c.X1} y={c.passY - 5} text-anchor="end">PASS {PASS}</text>
+            <text class="txt ref-target" x={c.X1} y={c.targetY - 6} text-anchor="end">
+                TARGET {TARGET}
+            </text>
+            <text class="txt tick" x={c.X1} y={c.passY - 5} text-anchor="end">
+                PASS {PASS}
+            </text>
         {/if}
 
         {#if c.showAbstain}
-            <rect class="abstain-region" x={c.abstainX} y={c.YT} width={c.abstainW} height={c.YB - c.YT} />
+            <rect
+                class="abstain-region"
+                x={c.abstainX}
+                y={c.YT}
+                width={c.abstainW}
+                height={c.YB - c.YT}
+            />
             {#if !compact}
-                <text class="txt abstain" x={c.abstainX + c.abstainW / 2} y={c.YT + 44} text-anchor="middle">
+                <text
+                    class="txt abstain"
+                    x={c.abstainX + c.abstainW / 2}
+                    y={c.YT + 44}
+                    text-anchor="middle"
+                >
                     ABSTAINED
                 </text>
-                <text class="txt abstain-sub" x={c.abstainX + c.abstainW / 2} y={c.YT + 60} text-anchor="middle">
+                <text
+                    class="txt abstain-sub"
+                    x={c.abstainX + c.abstainW / 2}
+                    y={c.YT + 60}
+                    text-anchor="middle"
+                >
                     coverage &lt; 50%
                 </text>
             {/if}
         {/if}
 
         {#if c.bandPoints}<polygon class="band" points={c.bandPoints} />{/if}
-        {#if c.projBandPoints}<polygon class="proj-band" points={c.projBandPoints} stroke-dasharray="4 3" />{/if}
+        {#if c.projBandPoints}<polygon
+                class="proj-band"
+                points={c.projBandPoints}
+                stroke-dasharray="4 3"
+            />{/if}
         {#if c.centerPoints}<polyline class="center" points={c.centerPoints} />{/if}
-        {#if c.projCenterPoints}<polyline class="proj-center" points={c.projCenterPoints} stroke-dasharray="4 3" />{/if}
+        {#if c.projCenterPoints}<polyline
+                class="proj-center"
+                points={c.projCenterPoints}
+                stroke-dasharray="4 3"
+            />{/if}
 
         {#if c.showNow}
             <circle class="now-dot" cx={c.nowDotX} cy={c.nowDotY} r={compact ? 3 : 4} />
             {#if !compact}
-                <text class="txt now-value" x={c.nowLabelX} y={c.nowLabelY} text-anchor="middle">{c.nowLabelText}</text>
-                <text class="txt proj-label" x={c.projLabelX} y={c.projLabelY} text-anchor="middle">{c.projLabelText}</text>
+                <text
+                    class="txt now-value"
+                    x={c.nowLabelX}
+                    y={c.nowLabelY}
+                    text-anchor="middle"
+                >
+                    {c.nowLabelText}
+                </text>
+                <text
+                    class="txt proj-label"
+                    x={c.projLabelX}
+                    y={c.projLabelY}
+                    text-anchor="middle"
+                >
+                    {c.projLabelText}
+                </text>
             {/if}
         {/if}
     {:else}
         {#if c.showUnlock}
-            <line class="ref unlock" x1={c.X0} y1={c.unlockY} x2={c.X1} y2={c.unlockY} stroke-dasharray="6 4" />
+            <line
+                class="ref unlock"
+                x1={c.X0}
+                y1={c.unlockY}
+                x2={c.X1}
+                y2={c.unlockY}
+                stroke-dasharray="6 4"
+            />
             {#if !compact}
-                <text class="txt ref-unlock" x={c.X1} y={c.unlockY - 6} text-anchor="end">READINESS UNLOCKS ≥ 50%</text>
+                <text
+                    class="txt ref-unlock"
+                    x={c.X1}
+                    y={c.unlockY - 6}
+                    text-anchor="end"
+                >
+                    READINESS UNLOCKS ≥ 50%
+                </text>
             {/if}
         {/if}
         {#if c.areaPoints}<polygon class="area" points={c.areaPoints} />{/if}
         {#if c.linePoints}<polyline class="line" points={c.linePoints} />{/if}
-        {#if c.seriesProjPoints}<polyline class="proj-center" points={c.seriesProjPoints} stroke-dasharray="4 3" />{/if}
-        {#each c.dots as d, i (i)}<circle class="dot" cx={d.x} cy={d.y} r={compact ? 1.8 : 2.5} />{/each}
-        {#if c.showProjDot}<circle class="proj-dot" cx={c.projDotX} cy={c.projDotY} r={compact ? 2.4 : 3} stroke-dasharray="2 2" />{/if}
+        {#if c.seriesProjPoints}<polyline
+                class="proj-center"
+                points={c.seriesProjPoints}
+                stroke-dasharray="4 3"
+            />{/if}
+        {#each c.dots as d, i (i)}<circle
+                class="dot"
+                cx={d.x}
+                cy={d.y}
+                r={compact ? 1.8 : 2.5}
+            />{/each}
+        {#if c.showProjDot}<circle
+                class="proj-dot"
+                cx={c.projDotX}
+                cy={c.projDotY}
+                r={compact ? 2.4 : 3}
+                stroke-dasharray="2 2"
+            />{/if}
         {#if !compact}
-            <text class="txt now-value" x={c.nowValueX} y={c.nowValueY} text-anchor="middle">{c.nowValueText}</text>
+            <text
+                class="txt now-value"
+                x={c.nowValueX}
+                y={c.nowValueY}
+                text-anchor="middle"
+            >
+                {c.nowValueText}
+            </text>
         {/if}
     {/if}
 </svg>

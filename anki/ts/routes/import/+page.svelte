@@ -32,6 +32,23 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
         { id: "json", label: "JSON" },
     ];
 
+    // Row status helpers (flattened from nested ternaries; see no-nested-ternary).
+    function rowAcuity(row: {
+        duplicate?: boolean;
+        correct?: boolean;
+    }): "muted" | "stable" | "critical" {
+        if (row.duplicate) {
+            return "muted";
+        }
+        return row.correct ? "stable" : "critical";
+    }
+    function rowStatus(row: { duplicate?: boolean; correct?: boolean }): string {
+        if (row.duplicate) {
+            return "deduped";
+        }
+        return row.correct ? "correct" : "MISS";
+    }
+
     let format: ImportFormat = "paste";
     let text = scenario.samples.paste;
     // "pristine" = still showing a sample, so switching tabs may swap it; once
@@ -67,9 +84,9 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
 
     function prefersReducedMotion(): boolean {
         return (
-            typeof window !== "undefined"
-            && typeof window.matchMedia === "function"
-            && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            typeof window !== "undefined" &&
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches
         );
     }
 
@@ -111,11 +128,13 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
     <div class="page">
         <header class="intro">
             <p class="eyebrow">Ingest · the organizing action</p>
-            <h1 class="headline">Import a Q-block — watch your misses organize themselves</h1>
+            <h1 class="headline">
+                Import a Q-block — watch your misses organize themselves
+            </h1>
             <p class="lede">
-                Drop a QBank or practice-test block. STAT normalizes it into attempts, dedups
-                idempotently, then unsuspends exactly the cards your misses map to and opens an
-                error-log reframe for each — one calm pulse, then quiet.
+                Drop a QBank or practice-test block. STAT normalizes it into attempts,
+                dedups idempotently, then unsuspends exactly the cards your misses map
+                to and opens an error-log reframe for each — one calm pulse, then quiet.
             </p>
         </header>
 
@@ -140,7 +159,9 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
                 {/each}
             </div>
 
-            <label class="field-label" for="block-input">Paste your {format.toUpperCase()} export</label>
+            <label class="field-label" for="block-input">
+                Paste your {format.toUpperCase()} export
+            </label>
             <textarea
                 id="block-input"
                 class="block-input"
@@ -151,12 +172,24 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
             ></textarea>
 
             <div class="input-actions">
-                <button type="button" class="btn ghost" on:click={loadSample}>Load sample block</button>
-                <button type="button" class="btn ghost" on:click={clearInput} disabled={!hasContent}>
+                <button type="button" class="btn ghost" on:click={loadSample}>
+                    Load sample block
+                </button>
+                <button
+                    type="button"
+                    class="btn ghost"
+                    on:click={clearInput}
+                    disabled={!hasContent}
+                >
                     Clear
                 </button>
                 <span class="spacer"></span>
-                <button type="button" class="btn primary" on:click={runImport} disabled={!hasContent}>
+                <button
+                    type="button"
+                    class="btn primary"
+                    on:click={runImport}
+                    disabled={!hasContent}
+                >
                     Import &amp; auto-link
                 </button>
             </div>
@@ -171,20 +204,20 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
                 </div>
 
                 <p class="parse-summary">
-                    <span class="stat-num">{preview.parsed}</span> parsed
+                    <span class="stat-num">{preview.parsed}</span>
+                    parsed
                     <span class="sep">·</span>
-                    <span class="stat-num">{preview.fresh}</span> new
+                    <span class="stat-num">{preview.fresh}</span>
+                    new
                     <span class="sep">·</span>
-                    <span class="stat-num dup">{preview.duplicates}</span> duplicates skipped
+                    <span class="stat-num dup">{preview.duplicates}</span>
+                    duplicates skipped
                 </p>
 
                 <ul class="rows" aria-label="Parsed rows (excerpt)">
                     {#each preview.rows as row, i (i)}
                         <li class="prow" class:dup={row.duplicate}>
-                            <StatusDot
-                                acuity={row.duplicate ? "muted" : row.correct ? "stable" : "critical"}
-                                size={8}
-                            />
+                            <StatusDot acuity={rowAcuity(row)} size={8} />
                             <span class="mono id">{row.externalId}</span>
                             <span class="topic">{row.topic}</span>
                             <span class="mono secs">{row.seconds}s</span>
@@ -194,14 +227,15 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
                                 class:miss={!row.correct && !row.duplicate}
                                 class:skip={row.duplicate}
                             >
-                                {row.duplicate ? "deduped" : row.correct ? "correct" : "MISS"}
+                                {rowStatus(row)}
                             </span>
                         </li>
                     {/each}
                 </ul>
 
                 <p class="dedup-note">
-                    Showing {preview.rows.length} of {preview.parsed} rows · illustrative. {scenario.dedupNote}
+                    Showing {preview.rows.length} of {preview.parsed} rows · illustrative.
+                    {scenario.dedupNote}
                 </p>
             </section>
         {/if}
@@ -229,22 +263,29 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
                         {phase === "linking" ? "Organizing…" : "Organized · just now"}
                     </p>
                     {#if phase === "settled"}
-                        <button type="button" class="linklike" on:click={resetResult}>Undo import</button>
+                        <button type="button" class="linklike" on:click={resetResult}>
+                            Undo import
+                        </button>
                     {/if}
                 </div>
 
                 <p class="result-headline">
-                    <span class="stat-num big">{autoLink.misses}</span> misses →
-                    <span class="stat-num big">{autoLink.cardsUnsuspended}</span> AnKing cards unsuspended
+                    <span class="stat-num big">{autoLink.misses}</span>
+                    misses →
+                    <span class="stat-num big">{autoLink.cardsUnsuspended}</span>
+                    AnKing cards unsuspended
                     <span class="sep">·</span>
-                    <span class="stat-num big">{autoLink.reframesOpened}</span> error-log reframes opened
+                    <span class="stat-num big">{autoLink.reframesOpened}</span>
+                    error-log reframes opened
                 </p>
 
                 <div class="topic-chips">
                     {#each autoLink.topics as t (t.topicId)}
                         <span
                             class="topic-chip"
-                            style="color: {STAT_SIGNAL[t.acuity]}; border-color: {STAT_SIGNAL[t.acuity]}"
+                            style="color: {STAT_SIGNAL[
+                                t.acuity
+                            ]}; border-color: {STAT_SIGNAL[t.acuity]}"
                             title="{acuityLabel(t.acuity)} · {t.cards} cards mapped"
                         >
                             {t.name} · {t.misses}
@@ -252,15 +293,19 @@ shared foundation ($lib/speedrun); no engine calls, illustrative data only.
                         </span>
                     {/each}
                 </div>
-                <p class="chips-caption">Where your {autoLink.misses} misses landed · one reframe each.</p>
+                <p class="chips-caption">
+                    Where your {autoLink.misses} misses landed · one reframe each.
+                </p>
 
                 {#if phase === "settled"}
                     <p class="settled-copy">
-                        Nothing else demands attention. Your next move is one review session — the queue
-                        is already built.
+                        Nothing else demands attention. Your next move is one review
+                        session — the queue is already built.
                     </p>
                     <div class="result-actions">
-                        <a class="btn primary" href="/reviewer">Start targeted review →</a>
+                        <a class="btn primary" href="/reviewer">
+                            Start targeted review →
+                        </a>
                         <a class="btn ghost" href="/errors">Open error log →</a>
                     </div>
                 {/if}

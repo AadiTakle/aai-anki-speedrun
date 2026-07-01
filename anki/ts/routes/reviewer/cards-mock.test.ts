@@ -3,13 +3,7 @@
 
 import { expect, test } from "vitest";
 
-import {
-    pacingAcuity,
-    reframePrompt,
-    SESSION_CARDS,
-    sessionSystems,
-    toRuns,
-} from "./cards-mock";
+import { pacingAcuity, reframePrompt, SESSION_CARDS, sessionSystems, toRuns } from "./cards-mock";
 
 test("toRuns splits **bold** markers into alternating runs", () => {
     expect(toRuns("plain")).toEqual([{ text: "plain", strong: false }]);

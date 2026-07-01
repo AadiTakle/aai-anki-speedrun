@@ -109,7 +109,10 @@ Built on the shared foundation ($lib/speedrun) — this lane never edits it.
     }
 
     function buttonFocused(): boolean {
-        return typeof document !== "undefined" && document.activeElement?.tagName === "BUTTON";
+        return (
+            typeof document !== "undefined" &&
+            document.activeElement?.tagName === "BUTTON"
+        );
     }
 
     function onKeydown(event: KeyboardEvent): void {
@@ -168,11 +171,13 @@ Built on the shared foundation ($lib/speedrun) — this lane never edits it.
                     {graded.length} miss-seeded {graded.length === 1 ? "card" : "cards"} reviewed
                 </p>
                 <p class="complete-sub">
-                    Every card earned its place — each came from a real QBank miss, ordered by
-                    points-at-stake and interleaved across systems. Grades flowed through Anki's FSRS
-                    unchanged.
+                    Every card earned its place — each came from a real QBank miss,
+                    ordered by points-at-stake and interleaved across systems. Grades
+                    flowed through Anki's FSRS unchanged.
                 </p>
-                <button type="button" class="btn primary" on:click={restart}>Restart session</button>
+                <button type="button" class="btn primary" on:click={restart}>
+                    Restart session
+                </button>
             </section>
         {:else if card}
             <section class="card-panel">
@@ -190,12 +195,18 @@ Built on the shared foundation ($lib/speedrun) — this lane never edits it.
                     {#if face === "answer"}
                         <span class="face-label">Answer</span>
                         <p class="face-body">
-                            {#each toRuns(card.answer) as run, i (i)}{#if run.strong}<strong>{run.text}</strong>{:else}{run.text}{/if}{/each}
+                            {#each toRuns(card.answer) as run, i (i)}{#if run.strong}<strong
+                                    >
+                                        {run.text}
+                                    </strong>{:else}{run.text}{/if}{/each}
                         </p>
                     {:else}
                         <span class="face-label">Question</span>
                         <p class="face-body">
-                            {#each toRuns(card.question) as run, i (i)}{#if run.strong}<strong>{run.text}</strong>{:else}{run.text}{/if}{/each}
+                            {#each toRuns(card.question) as run, i (i)}{#if run.strong}<strong
+                                    >
+                                        {run.text}
+                                    </strong>{:else}{run.text}{/if}{/each}
                         </p>
                     {/if}
                 </div>
@@ -206,8 +217,8 @@ Built on the shared foundation ($lib/speedrun) — this lane never edits it.
                     <!-- pacing awareness: accurate-but-slow hint (STAT-only) -->
                     <p class="pacing-hint">
                         <StatusDot acuity="watch" />
-                        Accurate-but-slow territory — you're past the ~{card.targetSeconds}s target for
-                        this item. Note your pace, then reveal.
+                        Accurate-but-slow territory — you're past the ~{card.targetSeconds}s
+                        target for this item. Note your pace, then reveal.
                     </p>
                 {/if}
 
@@ -219,7 +230,9 @@ Built on the shared foundation ($lib/speedrun) — this lane never edits it.
                 <div class="bar">
                     {#if face === "answer"}
                         <div class="grade-head">
-                            <span class="grade-label">Grade — FSRS intervals, unchanged from Anki</span>
+                            <span class="grade-label">
+                                Grade — FSRS intervals, unchanged from Anki
+                            </span>
                             <span class="answered" title="Time to answer this card">
                                 <StatusDot acuity={answeredPacing} />
                                 answered in {Math.round(elapsed)}s
@@ -239,20 +252,30 @@ Built on the shared foundation ($lib/speedrun) — this lane never edits it.
                             >
                                 Edit
                             </button>
-                            <button type="button" class="btn primary show" on:click={reveal}>
+                            <button
+                                type="button"
+                                class="btn primary show"
+                                on:click={reveal}
+                            >
                                 Show answer
                             </button>
                             <button
                                 type="button"
                                 class="btn ghost"
                                 title="More card actions"
-                                on:click={() => keptChrome("The More menu (bury / suspend / flag)")}
+                                on:click={() =>
+                                    keptChrome("The More menu (bury / suspend / flag)")}
                             >
                                 More ▾
                             </button>
                         </div>
                         <p class="hint">
-                            <span class="kbd">Space</span> reveals · <span class="kbd">1</span>–<span class="kbd">4</span> grade — kept from Anki
+                            <span class="kbd">Space</span>
+                            reveals ·
+                            <span class="kbd">1</span>
+                            –
+                            <span class="kbd">4</span>
+                             grade — kept from Anki
                         </p>
                     {/if}
                 </div>
@@ -266,8 +289,13 @@ Built on the shared foundation ($lib/speedrun) — this lane never edits it.
                 <div class="diff-col">
                     <span class="diff-title kept">Preserved from Anki</span>
                     <ul>
-                        <li>FSRS scheduling + the Again / Hard / Good / Easy grades and intervals</li>
-                        <li>Question → reveal-answer → grade flow and card rendering</li>
+                        <li>
+                            FSRS scheduling + the Again / Hard / Good / Easy grades and
+                            intervals
+                        </li>
+                        <li>
+                            Question → reveal-answer → grade flow and card rendering
+                        </li>
                         <li>The 1–4 grade shortcuts and Space to reveal / rate</li>
                         <li>Revlog, undo, and sync (the proven core)</li>
                     </ul>
@@ -275,10 +303,22 @@ Built on the shared foundation ($lib/speedrun) — this lane never edits it.
                 <div class="diff-col">
                     <span class="diff-title changed">Changed for STAT</span>
                     <ul>
-                        <li>Selection: cards seeded by today's QBank misses, not a deck's due pile</li>
-                        <li>Order: front-loaded by points-at-stake, interleaved across systems</li>
-                        <li>Framing: provenance line + the miss reframe on the answer side</li>
-                        <li>Chrome: deck picker &amp; raw counts → a focused session HUD + pacing</li>
+                        <li>
+                            Selection: cards seeded by today's QBank misses, not a
+                            deck's due pile
+                        </li>
+                        <li>
+                            Order: front-loaded by points-at-stake, interleaved across
+                            systems
+                        </li>
+                        <li>
+                            Framing: provenance line + the miss reframe on the answer
+                            side
+                        </li>
+                        <li>
+                            Chrome: deck picker &amp; raw counts → a focused session HUD
+                            + pacing
+                        </li>
                     </ul>
                 </div>
             </div>

@@ -47,8 +47,8 @@ shared foundation; nothing under lib/speedrun is edited.
     }
 
     const gapCaption =
-        `Biggest gap = "knows it, can't apply it (yet)." ${fixNext.topic} leads the fix-next queue `
-        + `(recall ${fixNext.memory}% vs application ${fixNext.performance}%).`;
+        `Biggest gap = "knows it, can't apply it (yet)." ${fixNext.topic} leads the fix-next queue ` +
+        `(recall ${fixNext.memory}% vs application ${fixNext.performance}%).`;
 </script>
 
 <AppShell active="trajectory">
@@ -58,9 +58,9 @@ shared foundation; nothing under lib/speedrun is edited.
         <header class="page-head">
             <h1 class="title">Exam trajectory</h1>
             <p class="subtitle">
-                Your readiness range closing on the target — honestly. Wide when data is thin,
-                narrowing as coverage and reviews accrue. The exam-day point is a projection, not a
-                promise.
+                Your readiness range closing on the target — honestly. Wide when data is
+                thin, narrowing as coverage and reviews accrue. The exam-day point is a
+                projection, not a promise.
             </p>
         </header>
 
@@ -85,10 +85,22 @@ shared foundation; nothing under lib/speedrun is edited.
             </div>
 
             <div class="legend">
-                <span class="legend-item"><span class="sw band" aria-hidden="true"></span> observed range</span>
-                <span class="legend-item"><span class="sw dash" aria-hidden="true"></span> projection, not a promise</span>
-                <span class="legend-item"><span class="sw dash stable" aria-hidden="true"></span> target {TARGET}</span>
-                <span class="legend-item"><span class="sw muted" aria-hidden="true"></span> abstained (coverage &lt; 50%)</span>
+                <span class="legend-item">
+                    <span class="sw band" aria-hidden="true"></span>
+                     observed range
+                </span>
+                <span class="legend-item">
+                    <span class="sw dash" aria-hidden="true"></span>
+                     projection, not a promise
+                </span>
+                <span class="legend-item">
+                    <span class="sw dash stable" aria-hidden="true"></span>
+                    target {TARGET}
+                </span>
+                <span class="legend-item">
+                    <span class="sw muted" aria-hidden="true"></span>
+                     abstained (coverage &lt; 50%)
+                </span>
             </div>
 
             <p class="caption">
@@ -105,7 +117,9 @@ shared foundation; nothing under lib/speedrun is edited.
                     <span class="spark-now">{coverageNow}% now</span>
                 </div>
                 <TrajectoryChart metric="coverage" compact />
-                <p class="caption">y: coverage (%) · readiness unlocks ≥ 50%. Illustrative.</p>
+                <p class="caption">
+                    y: coverage (%) · readiness unlocks ≥ 50%. Illustrative.
+                </p>
             </section>
 
             <section class="card spark">
@@ -114,17 +128,28 @@ shared foundation; nothing under lib/speedrun is edited.
                     <span class="spark-now">{stabilityNow} d now</span>
                 </div>
                 <TrajectoryChart metric="stability" compact />
-                <p class="caption">y: mean FSRS stability (days) — how long recall survives. Illustrative.</p>
+                <p class="caption">
+                    y: mean FSRS stability (days) — how long recall survives.
+                    Illustrative.
+                </p>
             </section>
         </div>
 
         <!-- Memory ↔ performance gap: what to fix next -->
         <section class="card">
             <div class="card-head">
-                <span class="card-title">Memory ↔ performance gap — what to fix next</span>
+                <span class="card-title">
+                    Memory ↔ performance gap — what to fix next
+                </span>
                 <span class="head-chips">
-                    <span class="key"><span class="sw bar-mem" aria-hidden="true"></span> recall</span>
-                    <span class="key"><span class="sw bar-perf" aria-hidden="true"></span> applied</span>
+                    <span class="key">
+                        <span class="sw bar-mem" aria-hidden="true"></span>
+                         recall
+                    </span>
+                    <span class="key">
+                        <span class="sw bar-perf" aria-hidden="true"></span>
+                         applied
+                    </span>
                 </span>
             </div>
 
@@ -136,16 +161,27 @@ shared foundation; nothing under lib/speedrun is edited.
                             <StatusDot acuity={gapAcuity(t.gap, isFix)} />
                             <span class="gap-topic">{t.topic}</span>
                             <span class="spacer"></span>
-                            <span class="gap-delta">{t.gap >= 0 ? "+" : ""}{t.gap} gap{isFix ? " · fix next" : ""}</span>
+                            <span class="gap-delta">
+                                {t.gap >= 0 ? "+" : ""}{t.gap} gap{isFix
+                                    ? " · fix next"
+                                    : ""}
+                            </span>
                         </div>
                         <div class="metric-line">
                             <span class="metric-key">recall</span>
-                            <span class="bar-track"><span class="bar mem" style="width: {t.memory}%"></span></span>
+                            <span class="bar-track">
+                                <span class="bar mem" style="width: {t.memory}%"></span>
+                            </span>
                             <span class="metric-val">{t.memory}%</span>
                         </div>
                         <div class="metric-line">
                             <span class="metric-key">applied</span>
-                            <span class="bar-track"><span class="bar perf" style="width: {t.performance}%"></span></span>
+                            <span class="bar-track">
+                                <span
+                                    class="bar perf"
+                                    style="width: {t.performance}%"
+                                ></span>
+                            </span>
                             <span class="metric-val">{t.performance}%</span>
                         </div>
                     </div>

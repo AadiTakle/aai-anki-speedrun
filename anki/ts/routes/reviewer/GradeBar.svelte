@@ -25,9 +25,21 @@ On mobile the buttons become big thumb-reach targets along the bottom.
 
     let grades: GradeDef[] = [];
     $: grades = [
-        { key: "again", label: "Again", num: 1, interval: intervals.again, critical: true },
+        {
+            key: "again",
+            label: "Again",
+            num: 1,
+            interval: intervals.again,
+            critical: true,
+        },
         { key: "hard", label: "Hard", num: 2, interval: intervals.hard },
-        { key: "good", label: "Good", num: 3, interval: intervals.good, isDefault: true },
+        {
+            key: "good",
+            label: "Good",
+            num: 3,
+            interval: intervals.good,
+            isDefault: true,
+        },
         { key: "easy", label: "Easy", num: 4, interval: intervals.easy },
     ];
 </script>

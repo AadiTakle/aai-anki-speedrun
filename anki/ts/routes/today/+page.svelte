@@ -55,14 +55,15 @@ Built on the read-only shared foundation — nothing under lib/speedrun is edite
             target = persona.readinessTarget;
             unlock = persona.readinessUnlock;
 
-            [readiness, memory, performance, stakes, nextAction, coverage] = await Promise.all([
-                getReadinessScore(),
-                getMemoryScore(),
-                getPerformanceScore(),
-                getPointsAtStake(),
-                getNextAction(),
-                getCoverageMap(),
-            ]);
+            [readiness, memory, performance, stakes, nextAction, coverage] =
+                await Promise.all([
+                    getReadinessScore(),
+                    getMemoryScore(),
+                    getPerformanceScore(),
+                    getPointsAtStake(),
+                    getNextAction(),
+                    getCoverageMap(),
+                ]);
         } catch (e) {
             error = String(e);
         }

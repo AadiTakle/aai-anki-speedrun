@@ -73,7 +73,11 @@ gauge, or the honest "NOT ENOUGH INFO" flatline + reasons when abstained.
 
 <div class="today">
     <!-- Readiness — the dominant vital -->
-    <VitalCard label="Readiness · exam-day projection" emphasis="dominant" updated={readinessUpdated}>
+    <VitalCard
+        label="Readiness · exam-day projection"
+        emphasis="dominant"
+        updated={readinessUpdated}
+    >
         {#if readiness.abstained}
             <div class="readiness-abstain">{ABSTAIN_HEADLINE}</div>
         {:else}
@@ -87,7 +91,10 @@ gauge, or the honest "NOT ENOUGH INFO" flatline + reasons when abstained.
         {/if}
 
         <div class="chips">
-            <ConfidenceChip label={confidenceLabel(readiness)} muted={readiness.abstained} />
+            <ConfidenceChip
+                label={confidenceLabel(readiness)}
+                muted={readiness.abstained}
+            />
             <Chip>{formatCoverage(readiness.coveragePct)} covered</Chip>
             {#if target != null}
                 <Chip>target {target}</Chip>
@@ -144,7 +151,9 @@ gauge, or the honest "NOT ENOUGH INFO" flatline + reasons when abstained.
             {:else}
                 <section class="order rest" aria-label="Next action">
                     <span class="order-eyebrow muted">NOTHING DUE · REST</span>
-                    <h2 class="order-headline">You're caught up. Rest is part of the plan.</h2>
+                    <h2 class="order-headline">
+                        You're caught up. Rest is part of the plan.
+                    </h2>
                 </section>
             {/if}
         </div>
