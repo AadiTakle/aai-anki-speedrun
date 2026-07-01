@@ -113,6 +113,7 @@ impl crate::services::SpeedrunService for Collection {
     }
 
     fn get_coverage_map(&mut self) -> error::Result<anki_proto::speedrun::CoverageMapResponse> {
-        Ok(anki_proto::speedrun::CoverageMapResponse::default())
+        // Read-only per-section blueprint coverage view over the F1 topic store.
+        self.coverage_map()
     }
 }
