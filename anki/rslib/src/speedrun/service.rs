@@ -62,10 +62,16 @@ impl crate::services::SpeedrunService for Collection {
     // points-at-stake display view). Scores default to an honest abstain.
     fn import_qbank_data(
         &mut self,
-        _input: anki_proto::speedrun::ImportQbankDataRequest,
+        input: anki_proto::speedrun::ImportQbankDataRequest,
     ) -> error::Result<anki_proto::collection::OpChanges> {
-        // Stub: no-op until F2 lands (real impl wraps a transact with dedup).
-        Ok(anki_proto::collection::OpChanges::default())
+        // Map the proto request into the col.conf-backed store, which merges +
+        // dedups undo-safely (see speedrun::attempts). The 2-arg inherent
+        // Collection::import_qbank_data is selected over this trait method.
+        self.import_qbank_data(
+            input.attempts.into_iter().map(Into::into).collect(),
+            input.tests.into_iter().map(Into::into).collect(),
+        )
+        .map(Into::into)
     }
 
     fn get_performance_score(&mut self) -> error::Result<anki_proto::speedrun::PerformanceScore> {
