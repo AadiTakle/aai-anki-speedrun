@@ -21,6 +21,20 @@ service SpeedrunService {
   rpc GetTopicMastery(GetTopicMasteryRequest) returns (TopicMasteryResponse);
   // Memory score with a likely range + the give-up/abstain rule. (PRD F6)
   rpc GetMemoryScore(generic.Empty) returns (MemoryScore);
+  // --- Next slice (build-readiness plan) ---
+  // Import QBank / practice-test attempts (paste/CSV/JSON, normalized
+  // upstream). Undo-safe; dedups on (source, external_id, answered_at). (PRD
+  // F2)
+  rpc ImportQbankData(ImportQbankDataRequest) returns (collection.OpChanges);
+  // Performance score (application/accuracy) with range + abstain rule; derived
+  // from imported QBank attempts. Second of the three scores.
+  rpc GetPerformanceScore(generic.Empty) returns (PerformanceScore);
+  // Readiness score (scaled to the Step 2 range) with range + abstain rule.
+  // Abstains until calibrated to NBME/UWSA (honesty bar). Third score.
+  rpc GetReadinessScore(generic.Empty) returns (ReadinessScore);
+  // Ranked points-at-stake topics (blueprint_weight * weakness) for the
+  // "Today's focus" list. Read-only view over the F5 signals.
+  rpc GetPointsAtStake(generic.Empty) returns (PointsAtStakeResponse);
 }
 
 // Implicitly includes any of the above methods not listed here (delegated to
@@ -89,4 +103,92 @@ message MemoryScore {
   repeated string reasons = 6;
   // Unix seconds when the score was last computed.
   int64 updated_at = 7;
+}
+
+// ---------------------------------------------------------------------------
+// Next slice (build-readiness plan): QBank ingestion + Performance/Readiness
+// scores + the points-at-stake display view. Frozen as the contract for the
+// F2/performance/readiness/display lane workers.
+// ---------------------------------------------------------------------------
+
+// A single graded QBank question attempt (the student's own performance
+// metadata — never third-party question content). (PRD F2)
+message QuestionAttempt {
+  // QBank name, e.g. "uworld" / "amboss".
+  string source = 1;
+  // The QBank's own question id, for dedup + linking.
+  string external_id = 2;
+  // Unix seconds the question was answered.
+  int64 answered_at = 3;
+  // Canonical topic id (crosswalk); may be empty if unmapped.
+  string topic_id = 4;
+  bool correct = 5;
+  // Time spent on the question, in seconds (0 if unknown). Feeds pacing (F8).
+  uint32 seconds = 6;
+}
+
+// A calibrated practice-test result (NBME/UWSA/Free120). (PRD F2)
+message PracticeTestResult {
+  string source = 1;
+  // Form identifier, e.g. "NBME 14" / "UWSA2".
+  string form = 2;
+  int64 taken_at = 3;
+  // Reported scaled score (Step 2 scale), if any.
+  double scaled_score = 4;
+  double percent_correct = 5;
+}
+
+message ImportQbankDataRequest {
+  repeated QuestionAttempt attempts = 1;
+  repeated PracticeTestResult tests = 2;
+}
+
+// Per-topic application accuracy with a Beta-Binomial credible interval.
+message TopicPerformance {
+  string topic_id = 1;
+  uint32 attempts = 2;
+  uint32 correct = 3;
+  // Posterior mean accuracy (0.0 .. 1.0) and its [low, high] credible band.
+  double accuracy = 4;
+  double low = 5;
+  double high = 6;
+}
+
+// Performance (application) score — same honesty-bar shape as MemoryScore.
+message PerformanceScore {
+  bool abstained = 1;
+  double point = 2;
+  double low = 3;
+  double high = 4;
+  double coverage_pct = 5;
+  repeated string reasons = 6;
+  int64 updated_at = 7;
+  repeated TopicPerformance topics = 8;
+}
+
+// Readiness score, scaled to the Step 2 CK range (~194..300). Abstains until
+// calibrated against NBME/UWSA — never show an unbacked scaled score.
+message ReadinessScore {
+  bool abstained = 1;
+  double point = 2;
+  double low = 3;
+  double high = 4;
+  double coverage_pct = 5;
+  repeated string reasons = 6;
+  int64 updated_at = 7;
+}
+
+// One topic in the "Today's focus" ranked list.
+message PointsAtStakeTopic {
+  string topic_id = 1;
+  string name = 2;
+  double blueprint_weight = 3;
+  double weakness = 4;
+  // blueprint_weight * weakness, the ranking key (higher = study first).
+  double points = 5;
+}
+
+message PointsAtStakeResponse {
+  // Highest points-at-stake first.
+  repeated PointsAtStakeTopic topics = 1;
 }

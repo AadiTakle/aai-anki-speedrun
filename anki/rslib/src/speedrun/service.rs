@@ -56,4 +56,38 @@ impl crate::services::SpeedrunService for Collection {
     fn get_memory_score(&mut self) -> error::Result<anki_proto::speedrun::MemoryScore> {
         self.memory_score()
     }
+
+    // --- Next slice (build-readiness plan): frozen stubs. Lane workers replace
+    // each with real logic + tests (F2 ingest; performance/readiness scores;
+    // points-at-stake display view). Scores default to an honest abstain.
+    fn import_qbank_data(
+        &mut self,
+        _input: anki_proto::speedrun::ImportQbankDataRequest,
+    ) -> error::Result<anki_proto::collection::OpChanges> {
+        // Stub: no-op until F2 lands (real impl wraps a transact with dedup).
+        Ok(anki_proto::collection::OpChanges::default())
+    }
+
+    fn get_performance_score(&mut self) -> error::Result<anki_proto::speedrun::PerformanceScore> {
+        Ok(anki_proto::speedrun::PerformanceScore {
+            abstained: true,
+            reasons: vec!["no QBank attempts imported yet".to_string()],
+            ..Default::default()
+        })
+    }
+
+    fn get_readiness_score(&mut self) -> error::Result<anki_proto::speedrun::ReadinessScore> {
+        Ok(anki_proto::speedrun::ReadinessScore {
+            abstained: true,
+            reasons: vec!["readiness not calibrated to NBME/UWSA yet".to_string()],
+            ..Default::default()
+        })
+    }
+
+    fn get_points_at_stake(
+        &mut self,
+    ) -> error::Result<anki_proto::speedrun::PointsAtStakeResponse> {
+        // Stub: empty until the display RPC worker computes ranked topics.
+        Ok(anki_proto::speedrun::PointsAtStakeResponse::default())
+    }
 }
