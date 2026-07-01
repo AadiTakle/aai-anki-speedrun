@@ -14,6 +14,7 @@ pub mod bench;
 pub mod focus;
 pub mod mastery;
 mod performance;
+mod relink;
 pub mod score;
 mod service;
 pub mod store;
