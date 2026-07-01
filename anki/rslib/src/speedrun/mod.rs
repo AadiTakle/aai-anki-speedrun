@@ -11,6 +11,7 @@
 mod attempts;
 #[cfg(feature = "bench")]
 pub mod bench;
+mod coverage;
 pub mod focus;
 pub mod mastery;
 mod performance;
