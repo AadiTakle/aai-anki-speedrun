@@ -13,6 +13,7 @@ mod attempts;
 pub mod bench;
 pub mod focus;
 pub mod mastery;
+mod next_action;
 mod performance;
 pub mod score;
 mod service;

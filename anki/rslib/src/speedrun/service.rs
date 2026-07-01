@@ -105,11 +105,7 @@ impl crate::services::SpeedrunService for Collection {
     }
 
     fn get_next_action(&mut self) -> error::Result<anki_proto::speedrun::NextAction> {
-        Ok(anki_proto::speedrun::NextAction {
-            abstained: true,
-            reason: "not enough signal to recommend a block yet".to_string(),
-            ..Default::default()
-        })
+        self.next_action()
     }
 
     fn get_coverage_map(&mut self) -> error::Result<anki_proto::speedrun::CoverageMapResponse> {
