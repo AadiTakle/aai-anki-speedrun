@@ -28,9 +28,7 @@ from anki import deck_config_pb2, speedrun_pb2
 from anki.consts import CARD_TYPE_REV, QUEUE_TYPE_REV
 from tests.shared import getEmptyCol
 
-POINTS_AT_STAKE = (
-    deck_config_pb2.DeckConfig.Config.REVIEW_CARD_ORDER_POINTS_AT_STAKE
-)
+POINTS_AT_STAKE = deck_config_pb2.DeckConfig.Config.REVIEW_CARD_ORDER_POINTS_AT_STAKE
 
 # (topic id, display name, blueprint_weight, weakness). Points-at-stake is
 # weight * weakness, so cardio 0.45 > renal 0.20 > gi 0.06 - unambiguous blocks.
