@@ -7,41 +7,43 @@
 //! score, together with an honest uncertainty band and an explicit abstain
 //! ("we can't score yet") rule. Read-only: it never mutates the collection.
 //!
-//! Definitions (frozen with the Wednesday contract, docs/wednesday_plan.md §6):
+//! Definitions (memory's abstain was relaxed after the Wednesday contract so
+//! the score appears as soon as reviews produce real FSRS recall — see ABSTAIN
+//! RULE):
 //! - **graded_reviews (n)**: the total row count of the `revlog` table.
 //! - **covered topic**: a taxonomy topic that has `total >= 1` in the F4
 //!   [`Collection::topic_mastery`] response (at least one existing mapped
 //!   card).
 //! - **coverage_pct**: `100 * (Σ blueprint_weight over covered topics) / (Σ
 //!   blueprint_weight over ALL taxonomy topics)`; `0.0` when the total taxonomy
-//!   weight is `0`.
+//!   weight is `0`. Reported for context — it does NOT gate the score.
 //! - **point**: the blueprint-weighted mean recall over recall-backed covered
 //!   topics — `100 * (Σ weight*avg_recall) / (Σ weight)` — clamped to `[0,
 //!   100]`. A recall-backed topic is a covered topic whose `recall_card_count`
 //!   is at least one; covered topics with no FSRS recall data are excluded so
 //!   their sentinel `avg_recall` of `0.0` cannot depress the score with an
 //!   unbacked number (honesty bar).
-//! - **ABSTAIN RULE:** `abstained = (n < 200) || (coverage_pct < 50)` (frozen),
-//!   plus an honesty guard: even past those thresholds, if no covered topic is
-//!   recall-backed we abstain rather than emit an unbacked zero. When
-//!   abstained, `point/low/high` are all `0.0` (the real `coverage_pct` is
-//!   still reported) and `reasons` names why. Otherwise a non-degenerate band
-//!   bounded by `0 <= low <= point <= high <= 100`, with `high` above `low`, is
-//!   produced.
-//! - **band**: the uncertainty half-width shrinks with `sqrt(n)` and with
-//!   higher coverage, so it is monotonically non-increasing in `n` (more graded
-//!   reviews, with coverage & recall fixed, never widens the band) and strictly
-//!   positive (never degenerate).
+//! - **ABSTAIN RULE:** memory abstains ONLY when no covered topic is
+//!   recall-backed (no reviewed card carries an FSRS memory state) — the honest
+//!   floor: with no recall data there is simply no number to give. It
+//!   deliberately does NOT gate on a fixed review count or coverage %: the
+//!   moment reviews produce real FSRS recall the score is shown, and the
+//!   uncertainty BAND below widens at low `n` so it stays honest about a thin
+//!   sample. (The stricter review-volume / whole-blueprint-coverage gates
+//!   belong to READINESS — the exam-day projection — not to this descriptive
+//!   recall stat.) When abstained, `point/low/high` are all `0.0` (the real
+//!   `coverage_pct` is still reported) and `reasons` names why. Otherwise a
+//!   non-degenerate band bounded by `0 <= low <= point <= high <= 100`, with
+//!   `high` above `low`, is produced.
+//! - **band**: the uncertainty half-width shrinks with `sqrt(n)` (with `n`
+//!   floored at 1) and with higher coverage, so it is monotonically
+//!   non-increasing in `n` (more graded reviews, with coverage & recall fixed,
+//!   never widens the band) and strictly positive (never degenerate).
 //! - **updated_at**: `TimestampSecs::now().0`.
 
 use anki_proto::speedrun::MemoryScore;
 
 use crate::prelude::*;
-
-/// Minimum graded reviews (revlog rows) before we are willing to score.
-const MIN_GRADED_REVIEWS: i64 = 200;
-/// Minimum blueprint coverage (percent) before we are willing to score.
-const MIN_COVERAGE_PCT: f64 = 50.0;
 
 impl Collection {
     /// Compute the blueprint-weighted memory score with its uncertainty band
@@ -92,48 +94,29 @@ impl Collection {
 
         let updated_at = TimestampSecs::now().0;
 
-        // Frozen abstain rule. A covered-weight sum of 0 implies coverage 0 < 50,
-        // so it is already covered by the coverage clause.
-        let abstained = graded_reviews < MIN_GRADED_REVIEWS || coverage_pct < MIN_COVERAGE_PCT;
-
-        if abstained {
-            let mut reasons = Vec::new();
-            if graded_reviews < MIN_GRADED_REVIEWS {
-                reasons.push(format!(
-                    "only {graded_reviews} graded reviews (< {MIN_GRADED_REVIEWS} required)"
-                ));
-            }
-            if coverage_pct < MIN_COVERAGE_PCT {
-                reasons.push(format!(
-                    "coverage {coverage_pct:.1}% of blueprint (< {MIN_COVERAGE_PCT:.0}% required)"
-                ));
-            }
-            return Ok(MemoryScore {
-                abstained: true,
-                point: 0.0,
-                low: 0.0,
-                high: 0.0,
-                coverage_pct,
-                reasons,
-                updated_at,
-            });
-        }
-
-        // Even with enough reviews and coverage, if none of the covered topics
-        // have FSRS recall data there is no honest basis for a number, so we
-        // abstain rather than emit an unbacked 0 (honesty bar).
+        // ABSTAIN RULE: the only honest floor is "do we have real recall data?".
+        // If no covered topic is recall-backed (no reviewed card carries an FSRS
+        // memory state) there is no number to give, so we abstain rather than
+        // emit an unbacked 0 (honesty bar). We deliberately do NOT gate on a
+        // fixed review count or coverage % — the moment reviews produce FSRS
+        // recall the score appears, with the band (below) widening at low n to
+        // stay honest about a thin sample. (Whole-blueprint coverage / review
+        // volume are READINESS's gates, not this descriptive recall stat's.)
         if scored_weight <= 0.0 {
+            let reason = if graded_reviews == 0 {
+                "no reviews yet — study some cards to build a memory signal".to_string()
+            } else {
+                "reviewed cards have no FSRS recall data yet (enable FSRS so reviews \
+                 record a memory state)"
+                    .to_string()
+            };
             return Ok(MemoryScore {
                 abstained: true,
                 point: 0.0,
                 low: 0.0,
                 high: 0.0,
                 coverage_pct,
-                reasons: vec![
-                    "covered topics have no FSRS recall data yet (need reviewed cards \
-                     with a memory state)"
-                        .to_string(),
-                ],
+                reasons: vec![reason],
                 updated_at,
             });
         }
@@ -149,7 +132,10 @@ impl Collection {
         // (coverage & recall fixed), and shrinks further as coverage rises. It
         // is strictly positive, so the [low, high] band is never degenerate.
         let coverage_frac = (coverage_pct / 100.0).clamp(0.0, 1.0);
-        let half_width = 100.0 / (graded_reviews as f64).sqrt() * (1.0 - 0.5 * coverage_frac);
+        // n floored at 1 so the band is well-defined even when recall data exists
+        // with very few (or zero) revlog rows; low n => a wide, honest band.
+        let n_eff = graded_reviews.max(1) as f64;
+        let half_width = 100.0 / n_eff.sqrt() * (1.0 - 0.5 * coverage_frac);
 
         let low = (point - half_width).max(0.0);
         let high = (point + half_width).min(100.0);
@@ -254,46 +240,58 @@ mod test {
             .unwrap()
     }
 
-    /// 1. Coverage is fine (>= 50%) but there are fewer than 200 graded reviews
-    ///    -> abstain, point/low/high all 0, real coverage still reported, and a
-    ///    reason names the review shortfall with numbers.
+    /// 1. Memory no longer gates on a fixed review count: a covered topic with
+    ///    real FSRS recall data scores even with very few graded reviews. The
+    ///    band just stays wide (honest about the thin sample) instead of
+    ///    abstaining — strictly wider than the same data at high n.
     #[test]
-    fn abstains_when_too_few_reviews() -> Result<()> {
-        let mut col = Collection::new();
-        let c = add_review_card(&mut col, 30, None, None);
-        seed_topics(&mut col, &[("cardio", 1.0)], &[(c.0, "cardio")]);
-        seed_revlog(&mut col, 10);
-        assert_eq!(revlog_count(&col), 10);
+    fn scores_with_few_reviews_when_recall_backed() -> Result<()> {
+        let mem = FsrsMemoryState {
+            stability: 100.0,
+            difficulty: 5.0,
+        };
 
-        let score = col.memory_score()?;
-        assert!(score.abstained, "n=10 < 200 must abstain");
-        assert_eq!(score.point, 0.0);
-        assert_eq!(score.low, 0.0);
-        assert_eq!(score.high, 0.0);
+        // Few graded reviews (4), far below the old 200 gate, but the covered
+        // topic carries an FSRS memory state -> real recall -> a score.
+        let mut col = Collection::new();
+        let a = add_review_card(&mut col, 30, Some(mem), Some(TimestampSecs::now()));
+        seed_topics(&mut col, &[("cardio", 1.0)], &[(a.0, "cardio")]);
+        seed_revlog(&mut col, 4);
+        assert_eq!(revlog_count(&col), 4);
+        let few = col.memory_score()?;
+        assert!(!few.abstained, "few reviews but recall-backed must score");
+        assert!(few.high > few.low, "band must be non-degenerate");
+        assert!(few.low >= 0.0 && few.high <= 100.0, "band within [0,100]");
+
+        // Same data with many reviews -> a strictly narrower band (sqrt(n)).
+        let mut col2 = Collection::new();
+        let b = add_review_card(&mut col2, 30, Some(mem), Some(TimestampSecs::now()));
+        seed_topics(&mut col2, &[("cardio", 1.0)], &[(b.0, "cardio")]);
+        seed_revlog(&mut col2, 400);
+        let many = col2.memory_score()?;
+        assert!(!many.abstained);
         assert!(
-            score.coverage_pct >= 50.0,
-            "coverage {} should still be reported and be >= 50",
-            score.coverage_pct
-        );
-        assert!(!score.reasons.is_empty());
-        assert!(
-            score
-                .reasons
-                .iter()
-                .any(|r| r.contains("graded reviews") && r.contains("10")),
-            "a reason must name the review shortfall with numbers: {:?}",
-            score.reasons
+            (few.high - few.low) > (many.high - many.low),
+            "low-n band {:.3} should be wider than high-n band {:.3}",
+            few.high - few.low,
+            many.high - many.low
         );
         Ok(())
     }
 
-    /// 2. There are >= 200 graded reviews but coverage is below 50% -> abstain,
-    ///    and a reason mentions coverage.
+    /// 2. Memory no longer gates on 50% blueprint coverage: with real recall
+    ///    data on the covered slice it scores, reporting the (low) coverage as
+    ///    context rather than abstaining. Whole-blueprint coverage is
+    ///    READINESS's gate, not this recall stat's.
     #[test]
-    fn abstains_when_low_coverage() -> Result<()> {
+    fn scores_at_low_coverage_when_recall_backed() -> Result<()> {
         let mut col = Collection::new();
-        // cardio weight 1, renal weight 3 -> covering only cardio = 25% coverage.
-        let c = add_review_card(&mut col, 30, None, None);
+        let mem = FsrsMemoryState {
+            stability: 100.0,
+            difficulty: 5.0,
+        };
+        // cardio (weight 1) covered; renal (weight 3) uncovered -> 25% coverage.
+        let c = add_review_card(&mut col, 30, Some(mem), Some(TimestampSecs::now()));
         seed_topics(
             &mut col,
             &[("cardio", 1.0), ("renal", 3.0)],
@@ -302,20 +300,17 @@ mod test {
         seed_revlog(&mut col, 250);
 
         let score = col.memory_score()?;
-        assert!(score.abstained, "coverage 25% < 50% must abstain");
-        assert_eq!(score.point, 0.0);
-        assert_eq!(score.low, 0.0);
-        assert_eq!(score.high, 0.0);
+        assert!(
+            !score.abstained,
+            "recall-backed at 25% coverage must now score, not abstain"
+        );
         assert!(
             score.coverage_pct < 50.0,
-            "coverage {} should be < 50",
+            "coverage {} is still reported as context",
             score.coverage_pct
         );
-        assert!(
-            score.reasons.iter().any(|r| r.contains("coverage")),
-            "a reason must mention coverage: {:?}",
-            score.reasons
-        );
+        assert!(score.point > 0.0, "a real recall-backed point");
+        assert!(score.high > score.low, "band must be non-degenerate");
         Ok(())
     }
 

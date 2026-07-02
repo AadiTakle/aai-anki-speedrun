@@ -8,9 +8,17 @@
 //! (`SpeedrunService`). This module currently provides compiling stubs that the
 //! Wednesday-slice features (F1, F4, F6) fill in. See docs/wednesday_plan.md.
 
+mod attempts;
 #[cfg(feature = "bench")]
 pub mod bench;
+mod coverage;
+mod daily;
+pub mod focus;
 pub mod mastery;
+mod next_action;
+mod performance;
+mod qbank;
+mod relink;
 pub mod score;
 mod service;
 pub mod store;

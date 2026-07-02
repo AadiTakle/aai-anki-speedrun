@@ -1,0 +1,101 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+ * License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+/* STAT design tokens — the clinical system from the STAT design canvases.
+ *
+ * Source of truth for component styling (the TS mirror lives in ./tokens.ts).
+ * Ink-on-paper + one teal; signal colors encode a real state only, never
+ * decoration. Light-only clinical surface by intent.
+ *
+ * Usage from a component in this folder:      @use "./tokens" as stat;
+ * Usage from a screen-lane route (via alias):  @use "$lib/speedrun/tokens" as stat;
+ *   then reference e.g. `stat.$primary`, `color: stat.$ink;`, or include
+ *   `@include stat.root;` on a wrapper to expose the `--stat-*` custom
+ *   properties for runtime use (AppShell already does this for its subtree). */
+
+@use "sass:map";
+
+/* --- palette ------------------------------------------------------------- */
+$primary: #0e6e62; // clinical teal — the one confident accent
+$primary-wash: #0e6e620d; // ~5% teal wash for the order card
+$ink: #16241f; // charting ink (blue-green near-black)
+$ink-soft: #5a6b64; // muted ink — secondary text / labels
+$paper: #f4f6f4; // cool clinical off-white (not cream)
+$surface: #ffffff; // container surface
+$line: #d7ded8; // ruled-paper hairline
+
+/* signal — encodes clinical/product STATE only */
+$critical: #b23a25; // urgent / high points-at-stake / miss
+$critical-wash: #b23a250d;
+$watch: #b26b12; // pacing: accurate-but-slow
+$stable: #2f7d53; // in-range / strong / correct
+$muted: #8a938f; // abstain / paused / insufficient
+
+$signal: (
+    critical: $critical,
+    watch: $watch,
+    stable: $stable,
+    muted: $muted,
+);
+
+/* --- type ---------------------------------------------------------------- */
+/* Referenced by family name with graceful system fallback (no @font-face, no
+ * external fetch). */
+$font-display: "Archivo Expanded", "Archivo Expanded Variable", "Archivo",
+    ui-sans-serif, system-ui, sans-serif;
+$font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+$font-mono: "IBM Plex Mono", ui-monospace, sfmono-regular, menlo, monospace;
+
+/* --- shape --------------------------------------------------------------- */
+$radius-sm: 6px; // cards / buttons
+$radius-md: 12px; // panels
+$radius-pill: 999px;
+
+/* Responsive seam — below this the console collapses to one column and the nav
+ * moves to a thumb-reach bottom bar. Matches Anki's `md` breakpoint. */
+$bp-compact: 768px;
+
+/* --- helpers ------------------------------------------------------------- */
+@function signal($name) {
+    @return map.get($signal, $name);
+}
+
+/* The instrument "readout" voice: monospace with tabular figures so digits
+ * align and the data reads like a chart. */
+@mixin readout {
+    font-family: $font-mono;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+@mixin eyebrow {
+    @include readout;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $ink-soft;
+}
+
+/* Expose the palette as `--stat-*` custom properties on a wrapper element so
+ * descendants (including slotted screen content) can theme off them at
+ * runtime. AppShell includes this on its root. */
+@mixin root {
+    --stat-primary: #{$primary};
+    --stat-primary-wash: #{$primary-wash};
+    --stat-ink: #{$ink};
+    --stat-ink-soft: #{$ink-soft};
+    --stat-paper: #{$paper};
+    --stat-surface: #{$surface};
+    --stat-line: #{$line};
+    --stat-critical: #{$critical};
+    --stat-critical-wash: #{$critical-wash};
+    --stat-watch: #{$watch};
+    --stat-stable: #{$stable};
+    --stat-muted: #{$muted};
+    --stat-font-display: #{$font-display};
+    --stat-font-body: #{$font-body};
+    --stat-font-mono: #{$font-mono};
+    --stat-radius-sm: #{$radius-sm};
+    --stat-radius-md: #{$radius-md};
+    --stat-radius-pill: #{$radius-pill};
+}

@@ -1465,12 +1465,22 @@ title="{}" {}>{}</button>""".format(
         )
         m.actionFullScreen.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
 
-        # Speedrun: add a Tools → Speedrun submenu once the window is up.
+        # Speedrun: add a Tools → Speedrun submenu once the window is up, and
+        # offer the first-run "Set up STAT" onboarding once the profile is open.
         import aqt.speedrun
 
         gui_hooks.main_window_did_init.append(
             lambda: aqt.speedrun.setup_speedrun_menu(self)
         )
+        gui_hooks.profile_did_open.append(
+            lambda: aqt.speedrun.maybe_offer_onboarding(self)
+        )
+        # Memory score is FSRS-recall based, so ensure FSRS is on for the profile
+        # (SM-2 records no memory state, which would make Memory abstain forever).
+        gui_hooks.profile_did_open.append(
+            lambda: aqt.speedrun.ensure_fsrs_enabled(self)
+        )
+        aqt.speedrun.setup_speedrun_reviewer(self)
 
     def updateTitleBar(self) -> None:
         self.setWindowTitle("Anki")

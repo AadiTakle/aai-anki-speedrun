@@ -21,6 +21,47 @@ service SpeedrunService {
   rpc GetTopicMastery(GetTopicMasteryRequest) returns (TopicMasteryResponse);
   // Memory score with a likely range + the give-up/abstain rule. (PRD F6)
   rpc GetMemoryScore(generic.Empty) returns (MemoryScore);
+  // --- Next slice (build-readiness plan) ---
+  // Import QBank / practice-test attempts (paste/CSV/JSON, normalized
+  // upstream). Undo-safe; dedups on (source, external_id, answered_at). (PRD
+  // F2)
+  rpc ImportQbankData(ImportQbankDataRequest) returns (collection.OpChanges);
+  // Performance score (application/accuracy) with range + abstain rule; derived
+  // from imported QBank attempts. Second of the three scores.
+  rpc GetPerformanceScore(generic.Empty) returns (PerformanceScore);
+  // Readiness score (scaled to the Step 2 range) with range + abstain rule.
+  // Abstains until calibrated to NBME/UWSA (honesty bar). Third score.
+  rpc GetReadinessScore(generic.Empty) returns (ReadinessScore);
+  // Ranked points-at-stake topics (blueprint_weight * weakness) for the
+  // "Today's focus" list. Read-only view over the F5 signals.
+  rpc GetPointsAtStake(generic.Empty) returns (PointsAtStakeResponse);
+  // --- Wave 2 (build-readiness plan): the miss->focus loop + console views ---
+  // F3: turn imported misses into action. Recomputes per-topic weakness from
+  // QBank accuracy (replacing any seeded weakness), auto-unsuspends the cards
+  // mapped behind missed questions, and appends an error-log entry per miss.
+  // Undo-safe.
+  rpc RelinkMisses(generic.Empty) returns (collection.OpChanges);
+  // F3: the error log (misses) with a clinical-reasoning reframe prompt, for
+  // the console's "errors" review page.
+  rpc GetErrorLog(generic.Empty) returns (ErrorLogResponse);
+  // The single recommended next block for the "Today" console hero (size +
+  // topics), derived from points-at-stake. Abstains when signal is thin.
+  rpc GetNextAction(generic.Empty) returns (NextAction);
+  // The daily loop as a progressing to-do (Plan, Q-block, Review, Close): each
+  // task's done/current/upcoming state is derived read-only from real signals
+  // (QBank imports + revlog + due cards) and resets at the day rollover.
+  // Exactly one incomplete task is CURRENT and carries the console's
+  // next-action CTA.
+  rpc GetDailyPlan(generic.Empty) returns (DailyPlanResponse);
+  // Per-section blueprint coverage map (which topics have study material). (F7)
+  rpc GetCoverageMap(generic.Empty) returns (CoverageMapResponse);
+  // --- Wave 3 (real data): flexible QBank ingestion ---
+  // Import aggregate QBank performance per topic (e.g. UWorld "Performance by
+  // System") — the counts a QBank exposes without a per-question export.
+  // Source-tagged; REPLACES all prior rows for that source (idempotent updates,
+  // no double-counting, no fabricated per-question records). (PRD F2)
+  rpc ImportQbankAggregate(ImportQbankAggregateRequest)
+      returns (ImportQbankAggregateResponse);
 }
 
 // Implicitly includes any of the above methods not listed here (delegated to
@@ -89,4 +130,187 @@ message MemoryScore {
   repeated string reasons = 6;
   // Unix seconds when the score was last computed.
   int64 updated_at = 7;
+}
+
+// ---------------------------------------------------------------------------
+// Next slice (build-readiness plan): QBank ingestion + Performance/Readiness
+// scores + the points-at-stake display view. Frozen as the contract for the
+// F2/performance/readiness/display lane workers.
+// ---------------------------------------------------------------------------
+
+// A single graded QBank question attempt (the student's own performance
+// metadata — never third-party question content). (PRD F2)
+message QuestionAttempt {
+  // QBank name, e.g. "uworld" / "amboss".
+  string source = 1;
+  // The QBank's own question id, for dedup + linking.
+  string external_id = 2;
+  // Unix seconds the question was answered.
+  int64 answered_at = 3;
+  // Canonical topic id (crosswalk); may be empty if unmapped.
+  string topic_id = 4;
+  bool correct = 5;
+  // Time spent on the question, in seconds (0 if unknown). Feeds pacing (F8).
+  uint32 seconds = 6;
+}
+
+// A calibrated practice-test result (NBME/UWSA/Free120). (PRD F2)
+message PracticeTestResult {
+  string source = 1;
+  // Form identifier, e.g. "NBME 14" / "UWSA2".
+  string form = 2;
+  int64 taken_at = 3;
+  // Reported scaled score (Step 2 scale), if any.
+  double scaled_score = 4;
+  double percent_correct = 5;
+}
+
+message ImportQbankDataRequest {
+  repeated QuestionAttempt attempts = 1;
+  repeated PracticeTestResult tests = 2;
+}
+
+// Per-topic application accuracy with a Beta-Binomial credible interval.
+message TopicPerformance {
+  string topic_id = 1;
+  uint32 attempts = 2;
+  uint32 correct = 3;
+  // Posterior mean accuracy (0.0 .. 1.0) and its [low, high] credible band.
+  double accuracy = 4;
+  double low = 5;
+  double high = 6;
+}
+
+// Performance (application) score — same honesty-bar shape as MemoryScore.
+message PerformanceScore {
+  bool abstained = 1;
+  double point = 2;
+  double low = 3;
+  double high = 4;
+  double coverage_pct = 5;
+  repeated string reasons = 6;
+  int64 updated_at = 7;
+  repeated TopicPerformance topics = 8;
+}
+
+// Readiness score, scaled to the Step 2 CK range (~194..300). Abstains until
+// calibrated against NBME/UWSA — never show an unbacked scaled score.
+message ReadinessScore {
+  bool abstained = 1;
+  double point = 2;
+  double low = 3;
+  double high = 4;
+  double coverage_pct = 5;
+  repeated string reasons = 6;
+  int64 updated_at = 7;
+}
+
+// One topic in the "Today's focus" ranked list.
+message PointsAtStakeTopic {
+  string topic_id = 1;
+  string name = 2;
+  double blueprint_weight = 3;
+  double weakness = 4;
+  // blueprint_weight * weakness, the ranking key (higher = study first).
+  double points = 5;
+}
+
+message PointsAtStakeResponse {
+  // Highest points-at-stake first.
+  repeated PointsAtStakeTopic topics = 1;
+}
+
+// One missed question, with a clinical-reasoning reframe prompt. (PRD F3)
+message ErrorLogEntry {
+  string source = 1;
+  string external_id = 2;
+  int64 answered_at = 3;
+  string topic_id = 4;
+  string topic_name = 5;
+  // A short "why did I miss this?" reframe prompt (clinical-reasoning drill).
+  string reframe_prompt = 6;
+  // How many suspended cards this miss unsuspended (0 if none were mapped).
+  uint32 unsuspended_cards = 7;
+}
+
+message ErrorLogResponse {
+  // Most recent misses first.
+  repeated ErrorLogEntry entries = 1;
+}
+
+// The one recommended next block for the "Today" console hero.
+message NextAction {
+  // True when there isn't enough signal to recommend a block (honesty bar).
+  bool abstained = 1;
+  // e.g. "Study 20 cards across Cardiology, Nephrology".
+  string headline = 2;
+  uint32 block_size = 3;
+  repeated string topic_ids = 4;
+  string reason = 5;
+}
+
+// One blueprint section's coverage (does it have mapped cards to study?). (F7)
+message CoverageSection {
+  string topic_id = 1;
+  string name = 2;
+  double blueprint_weight = 3;
+  bool covered = 4;
+  uint32 mapped_cards = 5;
+}
+
+message CoverageMapResponse {
+  repeated CoverageSection sections = 1;
+  // Blueprint-weighted fraction of the exam that has study material (0..1).
+  double covered_pct = 2;
+}
+
+// One topic's aggregate QBank result (correct out of total answered) — the
+// granularity a QBank exposes (per subject/system), not per-question. (PRD F2)
+message QbankTopicResult {
+  string topic_id = 1;
+  uint32 correct = 2;
+  uint32 total = 3;
+}
+
+message ImportQbankAggregateRequest {
+  // Provenance label, e.g. "UWorld", "Amboss", "NBME", or a custom name.
+  string source = 1;
+  // Replaces ALL prior aggregate rows for this source (idempotent updates).
+  repeated QbankTopicResult rows = 2;
+}
+
+message ImportQbankAggregateResponse {
+  collection.OpChanges changes = 1;
+  uint32 topics_imported = 2;
+  uint32 total_questions = 3;
+}
+
+// The daily loop rendered as a progressing to-do list for the "Today" console.
+// Each task is derived read-only from real signals and resets at the day
+// rollover; exactly one incomplete task is CURRENT (it carries the console's
+// next-action CTA). See crate::speedrun::daily.
+message DailyTask {
+  enum State {
+    // A later step in the loop, not yet actionable.
+    UPCOMING = 0;
+    // The one "do this now" step — carries the CTA.
+    CURRENT = 1;
+    // Completed today.
+    DONE = 2;
+  }
+  // Stable id: "plan" | "qblock" | "review" | "close".
+  string id = 1;
+  // Short imperative label, e.g. "Clear your review queue".
+  string label = 2;
+  // A derived detail line, e.g. "imported 9:12" or "18 / 40 done".
+  string detail = 3;
+  State state = 4;
+  // Progress counters (only the review task populates them; 0 otherwise).
+  uint32 done_count = 5;
+  uint32 total_count = 6;
+}
+
+message DailyPlanResponse {
+  // The loop in order: plan, qblock, review, close.
+  repeated DailyTask tasks = 1;
 }

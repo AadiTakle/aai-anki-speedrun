@@ -423,6 +423,13 @@ def is_sveltekit_page(path: str) -> bool:
         "import-page",
         "image-occlusion",
         "memory-score",
+        # STAT (Speedrun) console screens — the daily-loop destinations.
+        # Centralized here so screen lanes only add their own +page.svelte.
+        # "errors" + "trajectory" are temporarily unlinked (routes kept): both
+        # showed illustrative data with no real source yet.
+        "today",
+        "reviewer",
+        "import",
     ]
 
 
@@ -766,9 +773,19 @@ exposed_backend_list = [
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",
-    # SpeedrunService (read-only; needed by the memory-score page + dashboard)
+    # SpeedrunService (STAT console: scores, focus, coverage, error log + ingest)
     "get_memory_score",
     "get_topic_mastery",
+    "get_performance_score",
+    "get_readiness_score",
+    "get_points_at_stake",
+    "get_coverage_map",
+    "get_next_action",
+    "get_daily_plan",
+    "get_error_log",
+    "import_qbank_data",
+    "import_qbank_aggregate",
+    "relink_misses",
 ]
 
 

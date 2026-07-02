@@ -56,4 +56,82 @@ impl crate::services::SpeedrunService for Collection {
     fn get_memory_score(&mut self) -> error::Result<anki_proto::speedrun::MemoryScore> {
         self.memory_score()
     }
+
+    // --- Next slice (build-readiness plan): frozen stubs. Lane workers replace
+    // each with real logic + tests (F2 ingest; performance/readiness scores;
+    // points-at-stake display view). Scores default to an honest abstain.
+    fn import_qbank_data(
+        &mut self,
+        input: anki_proto::speedrun::ImportQbankDataRequest,
+    ) -> error::Result<anki_proto::collection::OpChanges> {
+        // Map the proto request into the col.conf-backed store, which merges +
+        // dedups undo-safely (see speedrun::attempts). The 2-arg inherent
+        // Collection::import_qbank_data is selected over this trait method.
+        self.import_qbank_data(
+            input.attempts.into_iter().map(Into::into).collect(),
+            input.tests.into_iter().map(Into::into).collect(),
+        )
+        .map(Into::into)
+    }
+
+    fn get_performance_score(&mut self) -> error::Result<anki_proto::speedrun::PerformanceScore> {
+        self.performance_score()
+    }
+
+    fn get_readiness_score(&mut self) -> error::Result<anki_proto::speedrun::ReadinessScore> {
+        Ok(anki_proto::speedrun::ReadinessScore {
+            abstained: true,
+            reasons: vec!["readiness not calibrated to NBME/UWSA yet".to_string()],
+            ..Default::default()
+        })
+    }
+
+    fn get_points_at_stake(
+        &mut self,
+    ) -> error::Result<anki_proto::speedrun::PointsAtStakeResponse> {
+        // Read-only ranked "Today's focus" view over the F1 topic store.
+        self.points_at_stake()
+    }
+
+    // --- Wave 2 (build-readiness plan): implemented. Each trait method delegates
+    // to its inherent Collection method: F3 relink misses + error log
+    // (speedrun::relink), next-action (speedrun::next_action), coverage map
+    // (speedrun::coverage).
+    fn relink_misses(&mut self) -> error::Result<anki_proto::collection::OpChanges> {
+        // The inherent Collection::relink_misses is selected over this trait
+        // method; it recomputes weakness, unsuspends missed topics' cards, and
+        // appends the error log undo-safely (F3, see speedrun::relink).
+        Collection::relink_misses(self).map(Into::into)
+    }
+
+    fn get_error_log(&mut self) -> error::Result<anki_proto::speedrun::ErrorLogResponse> {
+        Collection::get_error_log(self)
+    }
+
+    fn get_next_action(&mut self) -> error::Result<anki_proto::speedrun::NextAction> {
+        self.next_action()
+    }
+
+    fn get_daily_plan(&mut self) -> error::Result<anki_proto::speedrun::DailyPlanResponse> {
+        // Read-only projection of the daily loop as a progressing to-do
+        // (speedrun::daily); derives each task's state from real signals.
+        self.daily_plan()
+    }
+
+    fn get_coverage_map(&mut self) -> error::Result<anki_proto::speedrun::CoverageMapResponse> {
+        // Read-only per-section blueprint coverage view over the F1 topic store.
+        self.coverage_map()
+    }
+
+    // --- Wave 3 (real data): implemented. The inherent
+    // Collection::import_qbank_aggregate is selected over this trait method; it
+    // replaces the source's rows, ensures canonical blueprint topics, and
+    // returns the import counts undo-safely (F2, see speedrun::qbank). The
+    // aggregates feed performance scoring and weakness recompute.
+    fn import_qbank_aggregate(
+        &mut self,
+        input: anki_proto::speedrun::ImportQbankAggregateRequest,
+    ) -> error::Result<anki_proto::speedrun::ImportQbankAggregateResponse> {
+        Collection::import_qbank_aggregate(self, input.source, input.rows)
+    }
 }
